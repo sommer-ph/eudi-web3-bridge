@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: zk-backend
+
+logging:
+  level:
+    root: INFO
+    com.sommerph.zkbackend: DEBUG
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+keys:
+  curve: secp256r1
+
+  issuer:
+    algorithm: ES256
+    source: generate
+    key-id: issuer-001
+
+  credential:
+    binding:
+      algorithm: ES256
+      generate-per-credential: true
+
+eudi:
+  wallet:
+    registry:
+      type: json
+    storage:
+      path: data/eudi-wallets
+  credential:
+    claims:
+      - documentNumber
+      - name
+      - givenName
+      - dateOfBirth
+      - nationality
+
+blockchain:
+  wallet:
+    registry:
+      type: json
+    storage:
+      path: data/blockchain-wallets
