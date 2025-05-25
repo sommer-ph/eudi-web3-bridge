@@ -3,5 +3,8 @@
   "mnemonic" : "chase feel motion caught later uncover nation father motion network town deny",
   "base64MasterPublicKey" : "A3SwOSn4CmXjSHrlLTqs+5l6YiR2KVP2+E7ucrEUUYf3",
   "base64MasterSecretKey" : "njB0yTzKxrkZLcua5k+/y7q+2+9fOcheHrvxCi6zQeU=",
-  "childKeys" : [ ]
+  "childKeys" : [ {
+    "publicKeyBase64" : "AuvChQ/0QGvFMhPy1PO264renm1t7F2Oc5UIohNnHQCx",
+    "derivationIndex" : 0
+  } ]
 }
