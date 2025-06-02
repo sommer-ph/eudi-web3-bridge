@@ -37,7 +37,23 @@ public class EudiKeyManagementService {
         log.info("Generated EC key pair using curve: {}", config.getCurve());
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC", "BC");
         keyGen.initialize(new ECGenParameterSpec(config.getCurve()));
-        return keyGen.generateKeyPair();
+        KeyPair keyPair = keyGen.generateKeyPair();
+
+        // Temporary implementation to log key pair details relevant for proofs
+        // TODO: Replace temporary implementation with updated Eudi Wallet model, which includes pk_I in desired format
+        ECPublicKey ecPubKey = (ECPublicKey) keyPair.getPublic();
+        byte[] xBytes = stripLeadingZero(ecPubKey.getW().getAffineX().toByteArray());
+        byte[] yBytes = stripLeadingZero(ecPubKey.getW().getAffineY().toByteArray());
+
+        String xDecimal = ecPubKey.getW().getAffineX().toString();
+        String yDecimal = ecPubKey.getW().getAffineY().toString();
+
+        log.info("Public Key (Circom decimal):");
+        log.info("  x (decimal):   {}", xDecimal);
+        log.info("  y (decimal):   {}", yDecimal);
+        // End of temporary implementation
+
+        return keyPair;
     }
 
     public Map<String, Object> toJwk(PublicKey publicKey) {
