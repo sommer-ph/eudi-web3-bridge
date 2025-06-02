@@ -1,0 +1,1 @@
+// Class refer to constraint 3) from construction --> VerifySig(pk_I, c) = 1
