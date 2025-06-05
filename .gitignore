@@ -9,7 +9,6 @@
 *.sym
 *.zkey
 *.ptau
-*.json
 *.vkey.json
 *.pkey.json
 generate_witness.js

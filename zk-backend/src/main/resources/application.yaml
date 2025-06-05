@@ -44,3 +44,10 @@ blockchain:
       type: json
     storage:
       path: data/blockchain-wallets
+
+proof:
+  preparation:
+    registry:
+      type: json
+    storage:
+      path: data/proof-preparation

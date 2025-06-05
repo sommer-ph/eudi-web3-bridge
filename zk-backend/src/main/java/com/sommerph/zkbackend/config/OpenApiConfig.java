@@ -6,8 +6,6 @@ import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
-
 @Configuration
 public class OpenApiConfig {
 
@@ -17,7 +15,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("zk-SNARK Preparation API")
                         .version("1.0.0")
-                        .description("API for managing EUDI and Blockchain wallets"));
+                        .description("API for managing wallets (EUDI and Blockchain) and preparing data for zk-SNARK proof generation."));
     }
 
     @Bean
@@ -33,6 +31,14 @@ public class OpenApiConfig {
         return GroupedOpenApi.builder()
                 .group("blockchain")
                 .pathsToMatch("/api/blockchain/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi proofPreparationGroup() {
+        return GroupedOpenApi.builder()
+                .group("proof-preparation")
+                .pathsToMatch("/api/proof/preparation/**")
                 .build();
     }
 

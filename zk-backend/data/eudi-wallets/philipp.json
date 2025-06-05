@@ -1,0 +1,49 @@
+{
+  "userId" : "philipp",
+  "base64SecretKey" : "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgEl8UJ/ZAiHb1HDxTpm2jnfS2MX2cc8x7eZ6DIfiPfyugCgYIKoZIzj0DAQehRANCAASDKh2BXRz4QRmDCzXk3BdkH94v2BKMlEBFLVgVjwqVkwlCUPSdsTBonZGmADA19Cc0Z2aNiXR/0iPEXIln6zFc",
+  "base64PublicKey" : "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgyodgV0c+EEZgws15NwXZB/eL9gSjJRARS1YFY8KlZMJQlD0nbEwaJ2RpgAwNfQnNGdmjYl0f9IjxFyJZ+sxXA==",
+  "credentials" : [ {
+    "header" : {
+      "alg" : "ES256",
+      "typ" : "SD-JWT"
+    },
+    "payload" : {
+      "iss" : "issuer:123",
+      "sub" : "subject:philipp",
+      "iat" : 1749127678,
+      "exp" : 1749131278,
+      "_sd_alg" : "sha-256",
+      "_sd" : [ "OskYEZAj8VJLvqqbWVJsBHnI3ujpsXGY_9O_xJeLGYA", "XyJjUyzmUkI6SdqjgW3l_2pzDQlEQSEmFS4oeteFgAA", "ofEBLlsUHv6lcgijt_whq4izTgAwT9zqQf-Zk90P4zM", "gWkoAfKYA3ahC0c8e-ZsrSDeATfx6ZTCGOLODUMhA1M", "FtNL_2464Py2kRThJ29qf1IwXUmlSMPhK1oto0ardUo" ],
+      "cnf" : {
+        "jwk" : {
+          "kty" : "EC",
+          "x" : "QhW5l6JIt0SHtPynRsqEInCcnCEc9hU5b7DoWZecLYg",
+          "y" : "gNGzs_ah0irdjJE949cEzhJCYqSRXmZl7eqru6c7JRM",
+          "crv" : "P-256"
+        }
+      }
+    },
+    "signature" : "MEUCIQChaZT_c7hfqHd0gmAqbodEmp1p4BWO6v1JCG6Oj4LemwIgWsOu581q7-G9Cf_G_9-O2471e-iYWE5CT8iJvHno9R4",
+    "disclosures" : [ {
+      "value" : "12345678",
+      "salt" : "3562071e-b860-49ab-98e7-2926dd5b2732",
+      "key" : "documentNumber"
+    }, {
+      "value" : "Mustermann",
+      "salt" : "3d471151-5a3e-4ca6-b364-04f146b0a0d3",
+      "key" : "name"
+    }, {
+      "value" : "Philipp",
+      "salt" : "b55cc6b5-f71f-42f1-bc87-d0987eef7218",
+      "key" : "givenName"
+    }, {
+      "value" : "1990-01-01",
+      "salt" : "417dc54d-291b-47c8-a915-b41cccc461cc",
+      "key" : "dateOfBirth"
+    }, {
+      "value" : "DE",
+      "salt" : "d0fb6eb2-d451-4d85-96ea-c9793597f552",
+      "key" : "nationality"
+    } ]
+  } ]
+}

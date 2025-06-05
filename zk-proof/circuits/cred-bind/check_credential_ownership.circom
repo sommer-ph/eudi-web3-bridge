@@ -1,1 +1,0 @@
-// Class refer to constraint 2) from construction --> pk_c = c.cnf.jwk
