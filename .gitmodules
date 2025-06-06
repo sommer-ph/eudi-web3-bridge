@@ -1,6 +1,3 @@
-[submodule "zk-proof/circom_libs/circom-ecdsa-p256"]
-	path = zk-proof/circom_libs/circom-ecdsa-p256
-	url = https://github.com/privacy-scaling-explorations/circom-ecdsa-p256
 [submodule "circom_libs/circom-ecdsa-p256"]
 	path = circom_libs/circom-ecdsa-p256
 	url = https://github.com/sommer-ph/circom-ecdsa-p256.git
