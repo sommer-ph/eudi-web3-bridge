@@ -1,201 +1,175 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # ----------------------------------------------------
-# Main CLI script for zk-SNARK proof orchestration
+# 1-main.sh  –  zk-SNARK CLI (EUDI-Web3)
 # ----------------------------------------------------
 
+###############################################################################
+# Resolve key directories
+#   SCRIPT_DIR : .../zk-proof/scripts/bash
+#   ROOT_DIR   : .../zk-proof
+###############################################################################
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ROOT_DIR="$( realpath "${SCRIPT_DIR}/../.." )"
+
+###############################################################################
+# Styling helpers
+###############################################################################
+C_BOLD="\033[1m"; C_CYAN="\033[36m"; C_RED="\033[31m"; C_RESET="\033[0m"
+log() { echo -e "${C_CYAN}${C_BOLD}$*${C_RESET}"; }
+die() { echo -e "${C_RED}Error:${C_RESET} $*" >&2; exit 1; }
+
+###############################################################################
+# Prompt helpers
+###############################################################################
+prompt_choice() {                # var msg default
+  local _var="$1" _msg="$2" _def="$3" _in
+  read -rp "$_msg" _in
+  printf -v "$_var" '%s' "${_in:-$_def}"
+}
+
+choose_impl() {                  # var msg [x-y] opts default
+  local _var="$1" _msg="$2" _rng="$3" _opts="$4" _def="$5"
+  echo "$_msg"; echo -e "$_opts"
+  prompt_choice "${_var}" "Enter choice ${_rng}: " "${_def}"
+}
+
+###############################################################################
+# Optional CLI flags
+###############################################################################
+USER_ID=""; MODE=""
+while getopts "u:m:h" opt; do
+  case "$opt" in
+    u) USER_ID="$OPTARG" ;;
+    m) MODE="$OPTARG"   ;;
+    h) echo "Usage: $0 [-u USER_ID] [-m MODE]"; exit 0 ;;
+    *) exit 1 ;;
+  esac
+done
+shift $((OPTIND-1))
+
+###############################################################################
+# Intro banner
+###############################################################################
 clear
-echo "------------------------------------------------------"
-echo "  zk-SNARK service to bridge EUDI and Web3 started..."
-echo "------------------------------------------------------"
-echo ""
-echo "Gathering user input..."
-echo ""
+log "------------------------------------------------------"
+log "  zk-SNARK CLI – EUDI-Web3"
+log "------------------------------------------------------"
+echo
 
-# Enter userId
-read -p "Enter user ID: " USER_ID
-
+###############################################################################
+# Ask for user ID
+###############################################################################
 if [[ -z "$USER_ID" ]]; then
-  echo "No user ID provided. Exiting."
-  exit 1
+  prompt_choice USER_ID "Enter user ID: " ""
+  [[ -z "$USER_ID" ]] && die "No user ID provided."
 fi
+log "User ID: $USER_ID"
+echo
 
-echo ""
-echo "User ID set to: $USER_ID"
-echo ""
+###############################################################################
+# Choose proof mode
+###############################################################################
+if [[ -z "$MODE" ]]; then
+  cat <<EOF
+Select proof composition / sub-proof mode:
+  1) Monolithic (CredBind + KeyBind)
+  2) Recursive (TBI)
+  3) Cred-Bind only
+  4) Key-Bind only
+  5) Individual sub-proof
+EOF
+  prompt_choice MODE "Enter choice [1-5]: " ""
+fi
+[[ "$MODE" =~ ^[1-5]$ ]] || die "Invalid mode."
+echo
 
-# Select operation mode
-echo "Select proof composition or sub-proof mode:"
-echo "1) Monolithic composition (CredBind + KeyBind)"
-echo "2) Recursive composition (TBI)"
-echo "3) Cred-bind proof only"
-echo "4) Key-bind proof only"
-echo "5) Individual sub-proof"
-read -p "Enter choice [1-5]: " MODE
+###############################################################################
+# Implementation flags (defaults)
+###############################################################################
+C1_IMPL=1 C2_IMPL=1 C3_IMPL=1 C4_IMPL=1 K1_IMPL=1 SUBPROOF=0
 
-echo ""
-
+###############################################################################
+# Mode-specific logic
+###############################################################################
 case "$MODE" in
-  "2")
-    echo "Recursive composition selected. (To be implemented)"
+  2)
+    log "Recursive composition (TBI) – exiting."
     exit 0
     ;;
 
-  "1")
-    echo "Monolithic composition selected. All constraints will be configured."
-    echo ""
-
-    # CRED-BIND Constraints (1–4)
-    echo "Cred-Bind Constraint 1: PK_C = KeyDer(SK_C)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C1_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 2: Confirm PK_C in cnf section"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C2_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 3: Verify Signature SIG_C"
-    echo "1) In-circuit ECDSA (P256)"
-    echo "2) Off-circuit ECDSA + SHA-256 check"
-    echo "3) Off-circuit ECDSA + Poseidon check"
-    echo "4) Dummy Impl 4"
-    read -p "Choice [1-4]: " C3_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 4: PK_0 = KeyDer(SK_0)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C4_IMPL
-
-    # KEY-BIND Constraint
-    echo ""
-    echo "Key-Bind Constraint: PK_1 = KeyDer(PK_0, CC_0, i)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " K1_IMPL
+  1)  # Monolithic
+    log "Monolithic composition chosen."
+    choose_impl C1_IMPL "Cred-Bind C1 implementation" "[1-2]" \
+       "  1) Dummy 1\n  2) Dummy 2" 1
+    choose_impl C2_IMPL "Cred-Bind C2 implementation" "[1-2]" \
+       "  1) Dummy 1\n  2) Dummy 2" 1
+    choose_impl C3_IMPL "Cred-Bind C3 implementation" "[1-4]" \
+       "  1) In-circuit\n  2) Off-SHA\n  3) Off-Poseidon\n  4) Dummy" 1
+    choose_impl C4_IMPL "Cred-Bind C4 implementation" "[1-2]" \
+       "  1) Dummy 1\n  2) Dummy 2" 1
+    choose_impl K1_IMPL "Key-Bind implementation"     "[1-2]" \
+       "  1) Dummy 1\n  2) Dummy 2" 1
     ;;
 
-  "3")
-    echo "Cred-Bind proof only selected (4 constraints)."
-    echo ""
-
-    echo "Cred-Bind Constraint 1: PK_C = KeyDer(SK_C)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C1_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 2: Confirm PK_C in cnf section"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C2_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 3: Verify Signature SIG_C"
-    echo "1) In-circuit ECDSA (P256)"
-    echo "2) Off-circuit ECDSA + SHA-256 check"
-    echo "3) Off-circuit ECDSA + Poseidon check"
-    echo "4) Dummy Impl 4"
-    read -p "Choice [1-4]: " C3_IMPL
-
-    echo ""
-    echo "Cred-Bind Constraint 4: PK_0 = KeyDer(SK_0)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " C4_IMPL
+  3)  # Cred-Bind only
+    log "Cred-Bind proof only chosen."
+    choose_impl C1_IMPL "Cred-Bind C1 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1
+    choose_impl C2_IMPL "Cred-Bind C2 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1
+    choose_impl C3_IMPL "Cred-Bind C3 implementation" "[1-4]" "  1) In-circuit\n  2) Off-SHA\n  3) Off-Poseidon\n  4) Dummy" 1
+    choose_impl C4_IMPL "Cred-Bind C4 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1
     ;;
 
-  "4")
-    echo "Key-Bind proof only selected (1 constraint)."
-    echo ""
-    echo "Key-Bind Constraint: PK_1 = KeyDer(PK_0, CC_0, i)"
-    echo "1) Dummy Impl 1"
-    echo "2) Dummy Impl 2"
-    read -p "Choice [1-2]: " K1_IMPL
+  4)  # Key-Bind only
+    log "Key-Bind proof only chosen."
+    choose_impl K1_IMPL "Key-Bind implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1
     ;;
 
-  "5")
-    echo "Individual Sub-Proof selected."
-    echo "Which high-level constraint do you want to execute?"
-    echo "1) Cred-Bind Constraint 1 - PK_C = KeyDer(SK_C)"
-    echo "2) Cred-Bind Constraint 2 - Confirm PK_C in cnf section"
-    echo "3) Cred-Bind Constraint 3 - Verify Signature SIG_C"
-    echo "4) Cred-Bind Constraint 4 - PK_0 = KeyDer(SK_0)"
-    echo "5) Key-Bind Constraint - PK_1 = KeyDer(PK_0, CC_0, i)"
-    read -p "Choice [1-5]: " SUBPROOF
-
-    echo ""
+  5)  # Individual sub-proof
+    log "Individual sub-proof chosen."
+    cat <<EOF
+  1) Cred-Bind C1
+  2) Cred-Bind C2
+  3) Cred-Bind C3
+  4) Cred-Bind C4
+  5) Key-Bind
+EOF
+    prompt_choice SUBPROOF "Enter choice [1-5]: " ""
+    [[ "$SUBPROOF" =~ ^[1-5]$ ]] || die "Invalid sub-proof."
 
     case "$SUBPROOF" in
-      "1")
-        echo "Configuring Cred-Bind Constraint 1 - PK_C = KeyDer(SK_C)"
-        echo "1) Dummy Impl 1"
-        echo "2) Dummy Impl 2"
-        read -p "Choice [1-2]: " C1_IMPL
-        ;;
-      "2")
-        echo "Configuring Cred-Bind Constraint 2 - Confirm PK_C in cnf section"
-        echo "1) Dummy Impl 1"
-        echo "2) Dummy Impl 2"
-        read -p "Choice [1-2]: " C2_IMPL
-        ;;
-      "3")
-        echo "Configuring Cred-Bind Constraint 3 - Verify Signature SIG_C"
-        echo "1) In-circuit ECDSA (P256)"
-        echo "2) Off-circuit ECDSA + SHA-256 check"
-        echo "3) Off-circuit ECDSA + Poseidon check"
-        echo "4) Dummy Impl 4"
-        read -p "Choice [1-4]: " C3_IMPL
-        ;;
-      "4")
-        echo "Configuring Cred-Bind Constraint 4 - PK_0 = KeyDer(SK_0)"
-        echo "1) Dummy Impl 1"
-        echo "2) Dummy Impl 2"
-        read -p "Choice [1-2]: " C4_IMPL
-        ;;
-      "5")
-        echo "Configuring Key-Bind Constraint - PK_1 = KeyDer(PK_0, CC_0, i)"
-        echo "1) Dummy Impl 1"
-        echo "2) Dummy Impl 2"
-        read -p "Choice [1-2]: " K1_IMPL
-        ;;
-      *)
-        echo "Invalid sub-proof choice. Exiting."
-        exit 1
-        ;;
+      1) choose_impl C1_IMPL "C1 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1 ;;
+      2) choose_impl C2_IMPL "C2 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1 ;;
+      3) choose_impl C3_IMPL "C3 implementation" "[1-4]" "  1) In-circuit\n  2) Off-SHA\n  3) Off-Poseidon\n  4) Dummy" 1 ;;
+      4) choose_impl C4_IMPL "C4 implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1 ;;
+      5) choose_impl K1_IMPL "Key-Bind implementation" "[1-2]" "  1) Dummy 1\n  2) Dummy 2" 1 ;;
     esac
     ;;
-
-  *)
-    echo "Invalid mode selected. Exiting."
-    exit 1
-    ;;
 esac
+echo
 
-echo ""
-echo "Copying relevant data from backend..."
-bash ./scripts/bash/2-sync-from-backend.sh "$USER_ID" "$MODE" "$SUBPROOF"
+###############################################################################
+# Sync data & build input
+###############################################################################
+log "Copying relevant data from backend …"
+"${SCRIPT_DIR}/2-sync-from-backend.sh" "$USER_ID" "$MODE" "$SUBPROOF"
 
-echo ""
-echo "Preparing circuit input for selected mode..."
-bash ./scripts/bash/3-prepare-input.sh "$USER_ID" "$MODE" "${SUBPROOF:-0}" "${C1_IMPL:-0}" "${C2_IMPL:-0}" "${C3_IMPL:-0}" "${C4_IMPL:-0}" "${K1_IMPL:-0}"
+log "Preparing circuit input …"
+"${SCRIPT_DIR}/3-prepare-input.sh" \
+  "$USER_ID" "$MODE" "$SUBPROOF" \
+  "$C1_IMPL" "$C2_IMPL" "$C3_IMPL" "$C4_IMPL" "$K1_IMPL"
 
-echo ""
-echo "Data preparation complete for user '$USER_ID'."
-echo ""
+log "Input preparation complete."
+echo
 
-read -p "Do you want to compile the circuit and generate the proof now? [y/N]: " COMPILE_CONFIRMATION
-
-if [[ "$COMPILE_CONFIRMATION" =~ ^[Yy]$ ]]; then
-  echo ""
-  echo "Starting compilation and proving process..."
-  bash ./scripts/bash/4-compile-and-prove.sh "$USER_ID" "$MODE"
+###############################################################################
+# Optional compile + prove step
+###############################################################################
+read -rp "Compile circuit & generate proof now? [y/N]: " CONFIRM
+if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+  log "Starting compilation + proving …"
+  "${SCRIPT_DIR}/4-compile-and-prove.sh" "$USER_ID" "$MODE"
 else
-  echo ""
-  echo "Exiting CLI. You can manually run the compilation and proving process later."
-  exit 0
+  log "Aborted – compile/prove step skipped."
 fi

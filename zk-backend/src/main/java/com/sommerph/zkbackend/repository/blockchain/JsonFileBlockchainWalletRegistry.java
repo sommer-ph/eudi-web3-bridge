@@ -24,7 +24,7 @@ public class JsonFileBlockchainWalletRegistry implements BlockchainWalletRegistr
     @Override
     public void save(BlockchainWallet wallet) {
         log.info("Save blockchain wallet for user {}", wallet.getUserId());
-        Path filePath = storageDir.resolve(wallet.getUserId() + ".json");
+        Path filePath = storageDir.resolve(wallet.getUserId() + "-blockchain-wallet.json");
         try {
             mapper.writeValue(filePath.toFile(), wallet);
         } catch (IOException e) {
@@ -36,7 +36,7 @@ public class JsonFileBlockchainWalletRegistry implements BlockchainWalletRegistr
     @Override
     public BlockchainWallet load(String userId) {
         log.info("Load blockchain wallet for user {}", userId);
-        Path filePath = storageDir.resolve(userId + ".json");
+        Path filePath = storageDir.resolve(userId + "-blockchain-wallet.json");
         try {
             return mapper.readValue(filePath.toFile(), BlockchainWallet.class);
         } catch (IOException e) {
@@ -47,6 +47,6 @@ public class JsonFileBlockchainWalletRegistry implements BlockchainWalletRegistr
 
     @Override
     public boolean exists(String userId) {
-        return Files.exists(storageDir.resolve(userId + ".json"));
+        return Files.exists(storageDir.resolve(userId + "-blockchain-wallet.json"));
     }
 }
