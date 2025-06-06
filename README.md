@@ -124,8 +124,11 @@ git submodule sync --recursive
 
 ### Submodules Used
 
-- [`circom-ecdsa-p256`](https://github.com/privacy-scaling-explorations/circom-ecdsa-p256) – Used for in-circuit P256 signature verification.
-- [`circom-pairing`](https://github.com/yi-sun/circom-pairing) – Required submodule inside `circom-ecdsa-p256` for pairing-based operations.
+- [`circom-ecdsa-p256`](https://github.com/sommer-ph/circom-ecdsa-p256)  
+  _Forked from [privacy-scaling-explorations/circom-ecdsa-p256](https://github.com/privacy-scaling-explorations/circom-ecdsa-p256)._  
+  This fork updates the internal `.gitmodules` file to replace the SSH-based submodule URL for `circom-pairing` with an HTTPS URL. This change avoids SSH-related permission errors during submodule initialization and makes the repository easier to clone and set up in typical development environments.
+- [`circom-pairing`](https://github.com/yi-sun/circom-pairing)  
+  Required as a nested submodule inside `circom-ecdsa-p256`, used for pairing-based cryptographic operations.
 
 ### PTAU File Handling
 
