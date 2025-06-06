@@ -1,0 +1,8 @@
+[submodule "zk-proof/circom_libs/circom-ecdsa-p256"]
+	path = zk-proof/circom_libs/circom-ecdsa-p256
+	url = https://github.com/privacy-scaling-explorations/circom-ecdsa-p256
+[submodule "circom_libs/circom-ecdsa-p256"]
+	path = circom_libs/circom-ecdsa-p256
+	url = https://github.com/privacy-scaling-explorations/circom-ecdsa-p256
+[submodule "circom_libs/circom-ecdsa-p256/circuits/circom-pairing"]
+	url = https://github.com/yi-sun/circom-pairing.git
