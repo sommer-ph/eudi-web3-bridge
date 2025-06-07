@@ -83,8 +83,9 @@ esac
 #  Proof artefact filenames (timestamped → easier debugging)
 ###############################################################################
 TIMESTAMP="$(date +%s)"
+ISO_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 PROOF_PREFIX="${CIRCUIT_NAME}_${USER_ID}_${TIMESTAMP}"
-
+PERF_FILE="perf_${PROOF_PREFIX}.json"
 WITNESS_FILE="witness_${PROOF_PREFIX}.wtns"
 ZKEY_FILE="${CIRCUIT_NAME}_${PROOF_PREFIX}.zkey"
 PROOF_JSON="proof_${PROOF_PREFIX}.json"
@@ -98,61 +99,96 @@ info "  Mode:     ${MODE}"
 info "  Source:   ${CIRCUIT_SRC#${ROOT_DIR}/}"
 info "------------------------------------------------------"
 
+################################################################################
+# Performance logging
+################################################################################
+perf_log=()
+time_step() {
+  local label="$1"; shift
+  local start=$(date +%s%N)
+  "$@"
+  local end=$(date +%s%N)
+  local duration_ns=$((end - start))
+  local duration_sec=$(awk "BEGIN {print ${duration_ns}/1000000000}")
+  perf_log+=("{\"step\":\"$label\",\"seconds\":$duration_sec}")
+}
+
 ###############################################################################
 # 1) Compile circuit
 ###############################################################################
 ok "1/6  Compile circuit"
-circom "${CIRCUIT_SRC}" \
-       --r1cs --wasm --sym \
-       -l "${CIRCOM_LIBS}" \
-       -l node_modules \
-       -o "${BUILD_DIR}"
+time_step "compile_circuit" \
+        circom "${CIRCUIT_SRC}" \
+                --r1cs --wasm --sym \
+                -l "${CIRCOM_LIBS}" \
+                -l node_modules \
+                -o "${BUILD_DIR}"
 
 ###############################################################################
 # 2) Generate witness
 ###############################################################################
 ok "2/6  Generate witness"
 pushd "${BUILD_DIR}" >/dev/null
-node "${CIRCUIT_NAME}_js/generate_witness.js" \
-     "${CIRCUIT_NAME}_js/${CIRCUIT_NAME}.wasm" \
-     "${INPUT_FILE}" \
-     "${WITNESS_FILE}"
+time_step "generate_witness" \
+        node "${CIRCUIT_NAME}_js/generate_witness.js" \
+                "${CIRCUIT_NAME}_js/${CIRCUIT_NAME}.wasm" \
+                "${INPUT_FILE}" \
+                "${WITNESS_FILE}"
 
 ###############################################################################
 # 3) Groth16 setup
 ###############################################################################
 ok "3/6  Groth16 setup"
-snarkjs groth16 setup \
-        "${CIRCUIT_NAME}.r1cs" \
-        "${POT_FILE}" \
-        "${ZKEY_FILE}"
+time_step "trusted_setup" \
+        snarkjs groth16 setup \
+                "${CIRCUIT_NAME}.r1cs" \
+                "${POT_FILE}" \
+                "${ZKEY_FILE}"
 
 ###############################################################################
 # 4) Export verification key
 ###############################################################################
 ok "4/6  Export verification key"
-snarkjs zkey export verificationkey \
-        "${ZKEY_FILE}" \
-        "${VK_JSON}"
+time_step "export_vk" \
+        snarkjs zkey export verificationkey \
+                "${ZKEY_FILE}" \
+                "${VK_JSON}"
 
 ###############################################################################
 # 5) Generate proof
 ###############################################################################
 ok "5/6  Generate proof"
-snarkjs groth16 prove \
-        "${ZKEY_FILE}" \
-        "${WITNESS_FILE}" \
-        "${PROOF_JSON}" \
-        "${PUBLIC_JSON}"
+time_step "generate_proof" \
+        snarkjs groth16 prove \
+                "${ZKEY_FILE}" \
+                "${WITNESS_FILE}" \
+                "${PROOF_JSON}" \
+                "${PUBLIC_JSON}"
 
 ###############################################################################
 # 6) Verify proof
 ###############################################################################
 ok "6/6  Verify proof"
-snarkjs groth16 verify \
-        "${VK_JSON}" \
-        "${PUBLIC_JSON}" \
-        "${PROOF_JSON}"
+time_step "verify_proof" \
+        snarkjs groth16 verify \
+                "${VK_JSON}" \
+                "${PUBLIC_JSON}" \
+                "${PROOF_JSON}"
 
 popd >/dev/null
 ok "DONE: proof + verification successful  →  ${PROOF_PREFIX}"
+
+###############################################################################
+# Write performance data to JSON
+###############################################################################
+perf_json="{"
+perf_json+="\"user_id\":\"$USER_ID\","
+perf_json+="\"circuit\":\"$CIRCUIT_NAME\","
+perf_json+="\"timestamp\":$TIMESTAMP,"
+perf_json+="\"timestamp_iso\":\"$ISO_TIME\","
+perf_json+="\"proof_file\":\"$PROOF_JSON\","
+perf_json+="\"metrics\":["
+perf_json+=$(IFS=,; echo "${perf_log[*]}")
+perf_json+="]}"
+echo "$perf_json" > "${BUILD_DIR}/${PERF_FILE}"
+ok "Performance log written → ${PERF_FILE}"
