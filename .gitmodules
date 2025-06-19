@@ -3,3 +3,6 @@
 	url = https://github.com/sommer-ph/circom-ecdsa-p256.git
 [submodule "circom_libs/circom-ecdsa-p256/circuits/circom-pairing"]
 	url = https://github.com/yi-sun/circom-pairing.git
+[submodule "circom_libs/circom-ecdsa"]
+	path = circom_libs/circom-ecdsa
+	url = https://github.com/0xPARC/circom-ecdsa.git
