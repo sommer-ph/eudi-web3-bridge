@@ -6,3 +6,6 @@
 [submodule "circom_libs/circom-ecdsa"]
 	path = circom_libs/circom-ecdsa
 	url = https://github.com/sommer-ph/circom-ecdsa.git
+[submodule "circom_libs/circom-pairing"]
+	path = circom_libs/circom-pairing
+	url = https://github.com/yi-sun/circom-pairing.git
