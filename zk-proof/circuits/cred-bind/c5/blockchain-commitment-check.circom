@@ -7,8 +7,8 @@ include "circomlib/circuits/poseidon.circom";
  * the derived master public key pk_0 on secp256k1.
  *
  * ┌ Inputs ──────────────────────────────────────────────────┐
- * │ pk_0[2][4]  – Public key limbs (X and Y coordinates)     │
- * │ h_0         – Public commitment hash (public statement)  │
+ * │ pk_0[2][4]  – Public key limbs                           │
+ * │ h_0         – Public commitment hash                     │
  * └──────────────────────────────────────────────────────────┘
  *
  * Note: 64-bit limb representation, 4 limbs per 256-bit integer.
@@ -16,7 +16,7 @@ include "circomlib/circuits/poseidon.circom";
 
 template BlockchainCommitmentCheck() {
 
-    // ---------- Inputs ----------
+    // Inputs
     signal input pk_0[2][4];
     signal input h_0;
 
@@ -36,8 +36,3 @@ template BlockchainCommitmentCheck() {
     // Enforce equality to provided commitment
     H.out === h_0;
 }
-
-// -----------------------------------------------------------------------------
-// main is a standalone component for isolated circuit testing
-// In compositions this template will be instantiated explicitly.
-component main = BlockchainCommitmentCheck();

@@ -6,10 +6,10 @@ include "circom-ecdsa-p256/circuits/ecdsa.circom";
  * Computes the ECDSA public key on curve secp256r1 from a given secret key.
  * 
  * ┌ Inputs  ──────────────────────────────────────────────┐
- * │ sk_c[6]   – Secret key (private witness) (43-bit limbs)
+ * │ sk_c[6]    – EUDI wallet secret key                   │
  * └───────────────────────────────────────────────────────┘
  * ┌ Outputs ──────────────────────────────────────────────┐
- * │ pk_c[2][6] – Public key (X and Y coordinates)         │
+ * │ pk_c[2][6] – EUDI wallet public key                   │
  * └───────────────────────────────────────────────────────┘
  *
  * Note: 43-bit limb representation, 6 limbs per 256-bit integer
@@ -17,16 +17,16 @@ include "circom-ecdsa-p256/circuits/ecdsa.circom";
 
 template EudiWalletKeyDerivation () {
 
-    // ---------- Inputs ----------
+    // Inputs
     signal input sk_c[6];
 
-    // ---------- Outputs ----------
+    // Outputs
     signal output pk_c[2][6];
 
-    // ---------- Public Key Derivation ----------
-    // Use ECDSAPrivToPub from circom-ecdsa-p256 library
+    // Public key derivation
+    // Use P256_ECDSAPrivToPub from circom-ecdsa-p256 library
     // This computes sk * G on secp256r1 (P-256)
-    component privToPub = ECDSAPrivToPub(43, 6);
+    component privToPub = P256_ECDSAPrivToPub(43, 6);
 
     for (var i = 0; i < 6; i++) {
         privToPub.privkey[i] <== sk_c[i];
@@ -37,8 +37,3 @@ template EudiWalletKeyDerivation () {
         pk_c[1][i] <== privToPub.pubkey[1][i];
     }
 }
-
-// -----------------------------------------------------------------------------
-// main is a standalone component for isolated circuit testing
-// In compositions this template will be instantiated explicitly.
-component main = EudiWalletKeyDerivation();

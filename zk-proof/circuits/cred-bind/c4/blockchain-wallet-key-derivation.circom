@@ -6,10 +6,10 @@ include "circom-ecdsa/circuits/ecdsa.circom";
  * Derives the blockchain master public key on curve secp256k1 from the secret key.
  *
  * ┌ Inputs ────────────────────────────────────────────────────────┐
- * │ sk_0[4]    – Master secret key (private witness)               │
+ * │ sk_0[4]    – Master secret key                                 │
  * └────────────────────────────────────────────────────────────────┘
  * ┌ Outputs ───────────────────────────────────────────────────────┐
- * │ pk_0[2][4] – Master public key (X and Y coordinates, 2x4 limbs)│
+ * │ pk_0[2][4] – Master public key                                 │
  * └────────────────────────────────────────────────────────────────┘
  *
  * Note: 64-bit limb representation, 4 limbs per 256-bit integer.
@@ -17,13 +17,13 @@ include "circom-ecdsa/circuits/ecdsa.circom";
 
 template BlockchainWalletKeyDerivation () {
 
-    // ---------- Inputs ----------
+    // Inputs
     signal input sk_0[4];
 
-    // ---------- Outputs ----------
+    // Outputs
     signal output pk_0[2][4];
 
-    // ---------- Public Key Derivation ----------
+    // Public key derivation
     // Uses ECDSAPrivToPub from circom-ecdsa library
     // This computes sk * G on secp256k1
     component keyDer = ECDSAPrivToPub(64, 4);
@@ -37,8 +37,3 @@ template BlockchainWalletKeyDerivation () {
         pk_0[1][i] <== keyDer.pubkey[1][i];
     }
 }
-
-// -----------------------------------------------------------------------------
-// main is a standalone component for isolated circuit testing
-// In compositions this template will be instantiated explicitly.
-component main = BlockchainWalletKeyDerivation();

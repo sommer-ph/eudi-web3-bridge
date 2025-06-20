@@ -12,6 +12,7 @@
   "dependencies": {
     "asn1.js": "^5.4.1",
     "base64url": "^3.0.1",
-    "circomlib": "^2.0.5"
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7"
   }
 }
