@@ -1,4 +1,4 @@
-pragma circom 2.1.0;
+pragma circom 2.2.0;
 
 include "circom-ecdsa-p256/circuits/ecdsa.circom";
 
@@ -24,9 +24,9 @@ template EudiWalletKeyDerivation () {
     signal output pk_c[2][6];
 
     // Public key derivation
-    // Use P256_ECDSAPrivToPub from circom-ecdsa-p256 library
+    // Use ECDSAPrivToPub from circom-ecdsa-p256 library
     // This computes sk * G on secp256r1 (P-256)
-    component privToPub = P256_ECDSAPrivToPub(43, 6);
+    component privToPub = ECDSAPrivToPub(43, 6);
 
     for (var i = 0; i < 6; i++) {
         privToPub.privkey[i] <== sk_c[i];

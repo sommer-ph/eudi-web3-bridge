@@ -1,4 +1,4 @@
-pragma circom 2.1.0;
+pragma circom 2.2.0;
 
 include "circom-ecdsa/circuits/ecdsa.circom";
 
@@ -24,9 +24,9 @@ template BlockchainWalletKeyDerivation () {
     signal output pk_0[2][4];
 
     // Public key derivation
-    // Uses ECDSAPrivToPub from circom-ecdsa library
+    // Uses K1_ECDSAPrivToPub from circom-ecdsa library
     // This computes sk * G on secp256k1
-    component keyDer = ECDSAPrivToPub(64, 4);
+    component keyDer = K1_ECDSAPrivToPub(64, 4);
 
     for (var i = 0; i < 4; i++) {
         keyDer.privkey[i] <== sk_0[i];

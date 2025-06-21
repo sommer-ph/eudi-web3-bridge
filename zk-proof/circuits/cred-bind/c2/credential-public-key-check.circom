@@ -1,4 +1,4 @@
-pragma circom 2.1.0;
+pragma circom 2.2.0;
 
 /*
  * Compares the public key computed in c1 with the key
@@ -25,6 +25,7 @@ template CredentialPKCheck () {
         pk_c[0][i] === pk_cred[0][i];
         pk_c[1][i] === pk_cred[1][i];
     }
+
 }
 
 // Note: Currently only pk_c === pk_cred is checked.

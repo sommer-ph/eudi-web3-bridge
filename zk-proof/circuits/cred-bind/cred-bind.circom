@@ -1,4 +1,4 @@
-pragma circom 2.1.0;
+pragma circom 2.2.0;
 
 include "circom-ecdsa-p256/circuits/ecdsa.circom";
 include "circom-ecdsa/circuits/ecdsa.circom";
@@ -70,4 +70,4 @@ template CredentialWalletBinding() {
     c5.h_0 <== h_0;
 }
 
-component main = CredentialWalletBinding();
+component main { public [pk_I, h_0] } = CredentialWalletBinding();

@@ -10,9 +10,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@noble/curves": "^1.9.2",
+    "@noble/secp256k1": "^2.3.0",
+    "@peculiar/webcrypto": "^1.5.0",
     "asn1.js": "^5.4.1",
     "base64url": "^3.0.1",
     "circomlib": "^2.0.5",
-    "circomlibjs": "^0.1.7"
+    "circomlibjs": "^0.1.7",
+    "poseidon-lite": "^0.3.0"
   }
 }

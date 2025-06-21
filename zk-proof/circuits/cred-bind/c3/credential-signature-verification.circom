@@ -1,4 +1,4 @@
-pragma circom 2.1.0;
+pragma circom 2.2.0;
 
 include "circom-ecdsa-p256/circuits/ecdsa.circom";
 
@@ -25,7 +25,7 @@ template CredentialSignatureVerification () {
     signal input pk_I[2][6];
 
     // Verification component
-    component v = P256_ECDSAVerifyNoPubkeyCheck(43, 6);
+    component v = ECDSAVerifyNoPubkeyCheck(43, 6);
 
     for (var i = 0; i < 6; i++) {
         // Convert inputs to big-endian for verifier
