@@ -1,5 +1,6 @@
 package com.sommerph.zkbackend.service.blockchain;
 
+import com.sommerph.zkbackend.util.LimbUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.DeterministicKey;
@@ -8,6 +9,7 @@ import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.DeterministicSeed;
 import org.springframework.stereotype.Service;
 
+import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
@@ -17,6 +19,7 @@ import java.util.List;
 public class BlockchainKeyManagementService {
 
     public String generateMnemonic() {
+        log.info("Generate mnemonic for blockchain wallet");
         try {
             byte[] entropy = new byte[16]; // 128 bit = 12 words
             SecureRandom.getInstanceStrong().nextBytes(entropy);
@@ -28,6 +31,7 @@ public class BlockchainKeyManagementService {
     }
 
     public DeterministicKey deriveMasterKey(String mnemonic) {
+        log.info("Derive master key from mnemonic: {}", mnemonic);
         try {
             List<String> words = List.of(mnemonic.trim().split("\\s+"));
             DeterministicSeed seed = new DeterministicSeed(words, null, "", 0L);
@@ -40,6 +44,7 @@ public class BlockchainKeyManagementService {
     }
 
     public DeterministicKey deriveChildKey(String mnemonic, int index) {
+        log.info("Derive child key at index {}", index);
         try {
             List<String> words = List.of(mnemonic.trim().split("\\s+"));
             DeterministicSeed seed = new DeterministicSeed(words, null, "", 0L);
@@ -63,6 +68,21 @@ public class BlockchainKeyManagementService {
 
     public String encode(byte[] bytes) {
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    // Circuit-related operations
+
+    public String[] getSecretKeyLimbs(DeterministicKey key) {
+        log.info("Get secret key limbs");
+        BigInteger sk = new BigInteger(1, key.getPrivKeyBytes());
+        return LimbUtils.scalarToLimbsK1(sk);
+    }
+
+    public String[][] getPublicKeyLimbs(DeterministicKey key) {
+        log.info("Get public key limbs");
+        BigInteger x = key.getPubKeyPoint().getXCoord().toBigInteger();
+        BigInteger y = key.getPubKeyPoint().getYCoord().toBigInteger();
+        return LimbUtils.pointToLimbsK1(x, y);
     }
 
 }

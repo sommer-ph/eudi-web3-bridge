@@ -1,10 +1,11 @@
 {
   "userId" : "philipp",
-  "mnemonic" : "cinnamon chunk usage praise planet bar depart symbol endless dose gospel slice",
-  "base64MasterPublicKey" : "ArJPw5fyMSuCaI6tdMZU9ni2yNceHG1OX8fwiPpHs3nl",
-  "base64MasterSecretKey" : "sp94XBBvtrgK4CrKisEId3E+3hC7irgaBtTh5nLUNZY=",
+  "mnemonic" : "guide replace present unaware video panda lock lamp steak valley birth ribbon",
+  "base64MasterPublicKey" : "AtFkpmXWpWx4Obp9UHSL3aokgS3dppR26KV9XYLA7SDb",
+  "base64MasterSecretKey" : "jMvqj0AYdV4T4+q4wOJ/mVphsx4poUjw3XtMmMog5fY=",
   "childKeys" : [ {
-    "publicKeyBase64" : "Ahr+lZX2Rp1XuEmBwrM2NptDoEfTwQzN/1VXfFvnBTUw",
-    "derivationIndex" : 0
+    "publicKeyBase64" : "AvIYf++jQUl2s2JcINtwOo7N485UrqPtIb3SU+9qj04x",
+    "secretKeyBase64" : "A19h/5Ie8snXpow0hKa6xd1fX2Q1A5RCofgoNQ3YL5c=",
+    "derivationIndex" : 1
   } ]
 }

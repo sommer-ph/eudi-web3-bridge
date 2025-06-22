@@ -9,5 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ChildKey {
     private String publicKeyBase64;
+    private String secretKeyBase64;
     private int derivationIndex;
 }

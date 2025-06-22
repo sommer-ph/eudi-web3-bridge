@@ -1,6 +1,6 @@
 package com.sommerph.zkbackend.repository.proofPreparation;
 
-import com.sommerph.zkbackend.model.proofPreparation.EudiCredentialVerification;
+import com.sommerph.zkbackend.model.proofPreparation.monolithic.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
@@ -9,36 +9,76 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class InMemoryProofPreparationRegistry implements ProofPreparationRegistry {
 
-    private final Map<String, EudiCredentialVerification> eudiCredentialVerifyStore = new ConcurrentHashMap<>();
+    // Separate stores for each model
+    private final Map<String, EudiKeyDerivation> eudiWalletKeyStore = new ConcurrentHashMap<>();
+    private final Map<String, EudiCredentialPublicKeyCheck> credentialPKStore = new ConcurrentHashMap<>();
+    private final Map<String, EudiCredentialVerification> credentialVerificationStore = new ConcurrentHashMap<>();
+    private final Map<String, BlockchainKeyDerivation> blockchainWalletStore = new ConcurrentHashMap<>();
 
+    // C1
     @Override
-    public void saveEudiCredentialVerification(EudiCredentialVerification data) {
-        log.info("Save data required for EUDI credential verification for user {}", data.getUserId());
-        try {
-            eudiCredentialVerifyStore.put(data.getUserId(), data);
-        } catch (Exception e) {
-            log.error("Failed to save EUDI credential verification data for user: {}", data.getUserId(), e);
-            throw new RuntimeException("Failed to save EUDI credential verification data for user: " + data.getUserId(), e);
-        }
+    public void saveEudiWalletKeyDerivation(EudiKeyDerivation data) {
+        eudiWalletKeyStore.put(data.getUserId(), data);
     }
 
     @Override
-    public EudiCredentialVerification loadEudiCredentialVerification(String userId) {
-        log.info("Load EUDI credential verification data for user {} ", userId);
-        try {
-            return eudiCredentialVerifyStore.get(userId);
-        } catch (Exception e) {
-            log.error("Failed to load EUDI credential verification data for user: {}", userId, e);
-            throw new RuntimeException("Failed to load EUDI credential verification data for user: " + userId, e);
-        }
+    public EudiKeyDerivation loadEudiWalletKeyDerivation(String userId) {
+        return eudiWalletKeyStore.get(userId);
     }
 
     @Override
-    public boolean existsEudiCredentialVerification(String userId) {
-        return eudiCredentialVerifyStore.containsKey(userId);
+    public boolean existsEudiWalletKeyDerivation(String userId) {
+        return eudiWalletKeyStore.containsKey(userId);
     }
 
-    // For every new model in proofPreparation, implement methods for save, load, and exists as specified in interface.
-    // Note: File naming convention is <userId>-<modelName>.json
+    // C2
+    @Override
+    public void saveCredentialPKCheck(EudiCredentialPublicKeyCheck data) {
+        credentialPKStore.put(data.getUserId(), data);
+    }
+
+    @Override
+    public EudiCredentialPublicKeyCheck loadCredentialPKCheck(String userId) {
+        return credentialPKStore.get(userId);
+    }
+
+    @Override
+    public boolean existsCredentialPKCheck(String userId) {
+        return credentialPKStore.containsKey(userId);
+    }
+
+    // C3
+    @Override
+    public void saveCredentialSignatureVerification(EudiCredentialVerification data) {
+        credentialVerificationStore.put(data.getUserId(), data);
+    }
+
+    @Override
+    public EudiCredentialVerification loadCredentialSignatureVerification(String userId) {
+        return credentialVerificationStore.get(userId);
+    }
+
+    @Override
+    public boolean existsCredentialSignatureVerification(String userId) {
+        return credentialVerificationStore.containsKey(userId);
+    }
+
+    // C4
+    @Override
+    public void saveBlockchainWalletKeyDerivation(BlockchainKeyDerivation data) {
+        blockchainWalletStore.put(data.getUserId(), data);
+    }
+
+    @Override
+    public BlockchainKeyDerivation loadBlockchainWalletKeyDerivation(String userId) {
+        return blockchainWalletStore.get(userId);
+    }
+
+    @Override
+    public boolean existsBlockchainWalletKeyDerivation(String userId) {
+        return blockchainWalletStore.containsKey(userId);
+    }
+
+    // For every new model in proofPreparation that represent a high-level constraint, implement methods for save, load, and exists as specified in interface.
 
 }

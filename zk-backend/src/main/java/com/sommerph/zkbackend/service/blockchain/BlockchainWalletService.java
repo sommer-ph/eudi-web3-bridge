@@ -76,7 +76,9 @@ public class BlockchainWalletService {
         try {
             BlockchainWallet wallet = loadWallet(userId);
             DeterministicKey childKey = keyManagementService.deriveChildKey(wallet.getMnemonic(), index);
-            ChildKey result = new ChildKey(keyManagementService.encode(childKey.getPubKey()), index);
+            String publicKeyBase64 = keyManagementService.encode(childKey.getPubKey());
+            String secretKeyBase64 = keyManagementService.encode(childKey.getPrivKeyBytes());
+            ChildKey result = new ChildKey(publicKeyBase64, secretKeyBase64, index);
             wallet.getChildKeys().add(result);
             walletRegistry.save(wallet);
             return result;

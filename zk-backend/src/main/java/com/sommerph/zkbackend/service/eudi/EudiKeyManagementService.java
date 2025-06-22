@@ -1,22 +1,27 @@
 package com.sommerph.zkbackend.service.eudi;
 
 import com.sommerph.zkbackend.config.KeyConfigProperties;
+import com.sommerph.zkbackend.util.LimbUtils;
+import com.sommerph.zkbackend.util.SignatureUtils;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Map;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.*;
 
 @Slf4j
 @Service
 public class EudiKeyManagementService {
 
     private final KeyConfigProperties config;
+
+    @Getter
     private KeyPair issuerKeyPair;
 
     public EudiKeyManagementService(KeyConfigProperties config) {
@@ -29,26 +34,15 @@ public class EudiKeyManagementService {
         this.issuerKeyPair = generateKeyPair();
     }
 
-    public KeyPair getIssuerKeyPair() {
-        return issuerKeyPair;
-    }
-
-    public Map<String, String> getIssuerPublicKeyAffineCoordinates() {
-        ECPublicKey ecPubKey = (ECPublicKey) issuerKeyPair.getPublic();
-        return Map.of(
-                "x", ecPubKey.getW().getAffineX().toString(),
-                "y", ecPubKey.getW().getAffineY().toString()
-        );
-    }
-
     public KeyPair generateKeyPair() throws GeneralSecurityException {
-        log.info("Generated EC key pair using curve: {}", config.getCurve());
+        log.info("Generate EC key pair using curve: {}", config.getCurve());
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC", "BC");
         keyGen.initialize(new ECGenParameterSpec(config.getCurve()));
         return keyGen.generateKeyPair();
     }
 
     public Map<String, Object> toJwk(PublicKey publicKey) {
+        log.info("Convert public key to JWK format");
         ECPublicKey ecKey = (ECPublicKey) publicKey;
         byte[] x = ecKey.getW().getAffineX().toByteArray();
         byte[] y = ecKey.getW().getAffineY().toByteArray();
@@ -56,12 +50,13 @@ public class EudiKeyManagementService {
         return Map.of(
                 "kty", "EC",
                 "crv", "P-256",
-                "x", base64url(stripLeadingZero(x)),
-                "y", base64url(stripLeadingZero(y))
+                "x", base64url(x),
+                "y", base64url(y)
         );
     }
 
     public String computeKeyId(PublicKey publicKey) throws NoSuchAlgorithmException {
+        log.info("Compute public key id");
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hash = digest.digest(publicKey.getEncoded());
         return base64url(hash);
@@ -73,6 +68,58 @@ public class EudiKeyManagementService {
 
     private byte[] stripLeadingZero(byte[] bytes) {
         return (bytes.length > 0 && bytes[0] == 0x00) ? Arrays.copyOfRange(bytes, 1, bytes.length) : bytes;
+    }
+
+    // Circuit-related operations
+
+    public String[][] getIssuerPublicKeyLimbs() {
+        log.info("Get issuer public key limbs");
+        BigInteger x = ((ECPublicKey) issuerKeyPair.getPublic()).getW().getAffineX();
+        BigInteger y = ((ECPublicKey) issuerKeyPair.getPublic()).getW().getAffineY();
+        return LimbUtils.pointToLimbsR1(x, y);
+    }
+
+    public String[] getUserCredentialSecretKeyLimbs(String base64EncodedSecretKey) {
+        // Parse PKCS#8 encoded secret key
+        log.info("Get user credential secret key limbs");
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(base64EncodedSecretKey);
+            PrivateKey privateKey = KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
+            BigInteger s = ((java.security.interfaces.ECPrivateKey) privateKey).getS();
+            return LimbUtils.scalarToLimbsR1(s);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse user credential secret key", e);
+        }
+    }
+
+    public String[][] getCredentialBindingKeyJwkLimbs(Map<String, Object> jwk) {
+        log.info("Get credential binding key JWK limbs");
+        BigInteger x = new BigInteger(1, Base64.getUrlDecoder().decode((String) jwk.get("x")));
+        BigInteger y = new BigInteger(1, Base64.getUrlDecoder().decode((String) jwk.get("y")));
+        return LimbUtils.pointToLimbsR1(x, y);
+    }
+
+    public String[] computeCredentialMsgHashLimbs(String header, String payload) {
+        log.info("Compute credential message hash limbs");
+        String signingInput = header + "." + payload;
+        byte[] hash = SignatureUtils.hash(signingInput);
+        BigInteger hashInt = new BigInteger(1, hash);
+        return LimbUtils.scalarToLimbsR1(hashInt);
+    }
+
+    public Map<String, String[]> extractCredentialSignatureLimbs(byte[] derSignature) {
+        log.info("Parse credential signature limbs from DER format");
+        try {
+            SignatureUtils.EcdsaSignature sig = SignatureUtils.decodeDerSignature(derSignature);
+            String[] rLimbs = LimbUtils.scalarToLimbsR1(sig.getR());
+            String[] sLimbs = LimbUtils.scalarToLimbsR1(sig.getS());
+            return Map.of(
+                    "r", rLimbs,
+                    "s", sLimbs
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse ECDSA signature for zk-input", e);
+        }
     }
 
 }

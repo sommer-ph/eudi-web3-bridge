@@ -1,10 +1,18 @@
 package com.sommerph.zkbackend.service;
 
-import com.sommerph.zkbackend.model.proofPreparation.EudiCredentialVerification;
+import com.sommerph.zkbackend.model.eudi.EudiWallet;
+import com.sommerph.zkbackend.model.eudi.EudiCredential;
+import com.sommerph.zkbackend.model.blockchain.BlockchainWallet;
+import com.sommerph.zkbackend.model.proofPreparation.monolithic.*;
 import com.sommerph.zkbackend.repository.proofPreparation.ProofPreparationRegistry;
 import com.sommerph.zkbackend.service.eudi.EudiKeyManagementService;
+import com.sommerph.zkbackend.service.eudi.EudiWalletService;
+import com.sommerph.zkbackend.service.blockchain.BlockchainKeyManagementService;
+import com.sommerph.zkbackend.service.blockchain.BlockchainWalletService;
+import com.sommerph.zkbackend.util.ExportUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.crypto.DeterministicKey;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -14,104 +22,133 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ProofPreparationService {
 
+    private final EudiWalletService eudiWalletService;
+    private final BlockchainWalletService blockchainWalletService;
     private final EudiKeyManagementService eudiKeyManagementService;
+    private final BlockchainKeyManagementService blockchainKeyManagementService;
     private final ProofPreparationRegistry proofPreparationRegistry;
-
-    // cred-bind proof preparation
+    private final ExportUtils exportUtils;
 
     public void prepareCredBindProof(String userId) {
         log.info("Prepare data for cred-bind proof for user: {}", userId);
+        prepareEudiWalletKeyDerivation(userId);
+        prepareEudiCredentialPublicKeyCheck(userId);
+        prepareEudiCredentialVerification(userId);
+        // prepareBlockchainWalletMasterKeyDerivation(userId);
+        prepareBlockchainWalletChildKeyDerivation(userId, 0);
+
+        log.info("Export cred-bind proof data for user: {}", userId);
         try {
-            prepareEudiKeyDerivationProof(userId);
-            prepareEudiCredentialVerificationProof(userId);
-            prepareEudiCredentailPubKeyProof(userId);
-            prepareBlockchainMasterKeyDerivationProof(userId);
+            CredentialWalletBinding binding = exportUtils.createCredentialWalletBinding(userId, proofPreparationRegistry);
+            exportUtils.writeCredBindDataToFile(binding, userId);
         } catch (Exception e) {
-            log.error("Failed to prepare data for cred-bind proof for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for cred-bind proof for user: " + userId, e);
+            throw new RuntimeException("Failed to export cred-bind proof data for user: " + userId, e);
         }
     }
 
-    public void prepareEudiKeyDerivationProof(String userId) {
-        log.info("Prepare data for EUDI key derivation proof for user: {}", userId);
+    // C1
+    public void prepareEudiWalletKeyDerivation(String userId) {
+        log.info("Prepare data for EUDI wallet key derivation for user: {}", userId);
         try {
-            // TODO: Implement the actual logic for preparing EUDI key derivation proof
+            EudiWallet wallet = eudiWalletService.loadWallet(userId);
+            String[] skLimbs = eudiKeyManagementService.getUserCredentialSecretKeyLimbs(wallet.getBase64SecretKey());
+
+            EudiKeyDerivation data = new EudiKeyDerivation(
+                    userId,
+                    skLimbs
+            );
+            proofPreparationRegistry.saveEudiWalletKeyDerivation(data);
         } catch (Exception e) {
-            log.error("Failed to prepare data for EUDI key derivation proof for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for EUDI key derivation proof for user: " + userId, e);
+            throw new RuntimeException("Error preparing EUDI wallet key derivation data for user: " + userId, e);
         }
     }
 
-    public void prepareEudiCredentailPubKeyProof(String userId) {
-        log.info("Prepare data for EUDI credential public key inclusion proof for user: {}", userId);
+    // C2
+    public void prepareEudiCredentialPublicKeyCheck(String userId) {
+        log.info("Prepare data for EUDI credential public key check for user: {}", userId);
         try {
-            // TODO: Implement the actual logic for preparing EUDI credential public key inclusion proof
+            EudiWallet wallet = eudiWalletService.loadWallet(userId);
+
+            Object cnfObj = wallet.getCredentials().get(0).getPayload().get("cnf");
+            if (!(cnfObj instanceof Map)) {
+                throw new RuntimeException("CNF field is not a valid map");
+            }
+            Map<String, Object> cnfMap = (Map<String, Object>) cnfObj;
+            Object jwkObj = cnfMap.get("jwk");
+            if (!(jwkObj instanceof Map)) {
+                throw new RuntimeException("JWK field is not a valid map");
+            }
+            Map<String, Object> jwkMap = (Map<String, Object>) jwkObj;
+            String[][] pkLimbs = eudiKeyManagementService.getCredentialBindingKeyJwkLimbs(jwkMap);
+
+            EudiCredentialPublicKeyCheck data = new EudiCredentialPublicKeyCheck(
+                    userId,
+                    pkLimbs
+            );
+            proofPreparationRegistry.saveCredentialPKCheck(data);
         } catch (Exception e) {
-            log.error("Failed to prepare data for EUDI credential public key inclusion proof for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for EUDI credential public key inclusion proof for user: " + userId, e);
+            throw new RuntimeException("Error preparing credential public key check data for user: " + userId, e);
         }
     }
 
-    public void prepareEudiCredentialVerificationProof(String userId) {
-        log.info("Prepare data for EUDI credential verification proof for user: {}", userId);
+    // C3
+    public void prepareEudiCredentialVerification(String userId) {
+        log.info("Prepare data for EUDI credential verification for user: {}", userId);
         try {
-            Map<String, String> coords = eudiKeyManagementService.getIssuerPublicKeyAffineCoordinates();
+            EudiWallet wallet = eudiWalletService.loadWallet(userId);
+            EudiCredential credential = wallet.getCredentials().get(0);
+
+            String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
+            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
+                    credential.getHeader().toString(),
+                    credential.getPayload().toString()
+            );
+            Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
+                    java.util.Base64.getUrlDecoder().decode(credential.getSignature())
+            );
+
             EudiCredentialVerification data = new EudiCredentialVerification(
                     userId,
-                    new EudiCredentialVerification.IssuerPublicKey(coords.get("x"), coords.get("y"))
+                    pkILimbs,
+                    msgHashLimbs,
+                    sigLimbs.get("r"),
+                    sigLimbs.get("s")
             );
-            proofPreparationRegistry.saveEudiCredentialVerification(data);
-            log.info("Successfully saved EUDI credential verification data for user: {}", userId);
+            proofPreparationRegistry.saveCredentialSignatureVerification(data);
         } catch (Exception e) {
-            log.error("Failed to prepare data for EUDI credential verification for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for EUDI credential verification for user: " + userId, e);
+            throw new RuntimeException("Error preparing credential verification data for user: " + userId, e);
         }
     }
 
-    public void prepareBlockchainMasterKeyDerivationProof(String userId) {
-        log.info("Prepare data for Blockchain master key derivation proof for user: {}", userId);
-        try {
-            // TODO: Implement the actual logic for preparing Blockchain master key derivation proof
-        } catch (Exception e) {
-            log.error("Failed to prepare data for Blockchain master key derivation proof for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for Blockchain master key derivation proof for user: " + userId, e);
-        }
+    // C4
+    public void prepareBlockchainWalletMasterKeyDerivation(String userId) {
+        prepareBlockchainWalletKeyDerivation(userId, false, 0);
     }
 
-    // key-bind proof preparation
-
-    public void prepareBlockchainChildKeyDerivationProof(String userId) {
-        log.info("Prepare data for Blockchain child key derivation proof for user: {}", userId);
-        try {
-            // TODO: Implement the actual logic for preparing Blockchain child key derivation proof
-        } catch (Exception e) {
-            log.error("Failed to prepare data for Blockchain child key derivation proof for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for Blockchain child key derivation proof for user: " + userId, e);
-        }
+    public void prepareBlockchainWalletChildKeyDerivation(String userId, int index) {
+        prepareBlockchainWalletKeyDerivation(userId, true, index);
     }
 
-    // Monolithic composition proof preparation
-
-    public void prepareMonolithicProof(String userId) {
-        log.info("Prepare data for monolithic proof composition for user: {}", userId);
+    private void prepareBlockchainWalletKeyDerivation(String userId, boolean useChild, int index) {
+        log.info("Prepare data for blockchain wallet key derivation for user: {}, useChild: {}, index: {}", userId, useChild, index);
         try {
-            prepareCredBindProof(userId);
-            prepareBlockchainChildKeyDerivationProof(userId);
+            BlockchainWallet wallet = blockchainWalletService.loadWallet(userId);
+            DeterministicKey key;
+            if (useChild) {
+                key = blockchainKeyManagementService.deriveChildKey(wallet.getMnemonic(), index);
+            } else {
+                key = blockchainKeyManagementService.deriveMasterKey(wallet.getMnemonic());
+            }
+            String[] skLimbs = blockchainKeyManagementService.getSecretKeyLimbs(key);
+            String[][] pkLimbs = blockchainKeyManagementService.getPublicKeyLimbs(key);
+            BlockchainKeyDerivation data = new BlockchainKeyDerivation(
+                    userId,
+                    skLimbs,
+                    pkLimbs
+            );
+            proofPreparationRegistry.saveBlockchainWalletKeyDerivation(data);
         } catch (Exception e) {
-            log.error("Failed to prepare data for monolithic proof composition for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for monolithic proof composition for user: " + userId, e);
-        }
-    }
-
-    // Recursive composition proof preparation
-
-    public void prepareRecursiveProof(String userId) {
-        log.info("Prepare data for recursive proof composition for user: {}", userId);
-        try {
-            prepareCredBindProof(userId);
-        } catch (Exception e) {
-            log.error("Failed to prepare data for recursive proof composition for user: {}", userId, e);
-            throw new RuntimeException("Could not prepare data for recursive proof composition for user: " + userId, e);
+            throw new RuntimeException("Error preparing blockchain key derivation for user: " + userId, e);
         }
     }
 

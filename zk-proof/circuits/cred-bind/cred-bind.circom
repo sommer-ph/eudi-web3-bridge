@@ -8,12 +8,11 @@ include "./c1/eudi-wallet-key-derivation.circom";
 include "./c2/credential-public-key-check.circom";
 include "./c3/credential-signature-verification.circom";
 include "./c4/blockchain-wallet-key-derivation.circom";
-include "./c5/blockchain-commitment-check.circom";
 
 template CredentialWalletBinding() {
     // Public inputs
     signal input pk_I[2][6];
-    signal input h_0;
+    signal input pk_0[2][4];
 
     // Private witnesses
     signal input sk_c[6];
@@ -22,7 +21,6 @@ template CredentialWalletBinding() {
     signal input r[6];
     signal input s[6];
     signal input sk_0[4];
-    signal input pk_0[2][4];
 
     // C1: EudiWalletKeyDerivation (pk_c = KeyDer(sk_c))
     component c1 = EudiWalletKeyDerivation();
@@ -61,13 +59,6 @@ template CredentialWalletBinding() {
         c4.pk_0[1][i] === pk_0[1][i];
     }
 
-    // C5: BlockchainCommitmentCheck (h_0 === H(pk_0))
-    component c5 = BlockchainCommitmentCheck();
-    for (var i = 0; i < 4; i++) {
-        c5.pk_0[0][i] <== pk_0[0][i];
-        c5.pk_0[1][i] <== pk_0[1][i];
-    }
-    c5.h_0 <== h_0;
 }
 
-component main { public [pk_I, h_0] } = CredentialWalletBinding();
+component main { public [pk_I, pk_0] } = CredentialWalletBinding();

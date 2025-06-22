@@ -126,9 +126,12 @@ git submodule sync --recursive
 
 - [`circom-ecdsa-p256`](https://github.com/sommer-ph/circom-ecdsa-p256)  
   _Forked from [privacy-scaling-explorations/circom-ecdsa-p256](https://github.com/privacy-scaling-explorations/circom-ecdsa-p256)._  
-  This fork updates the internal `.gitmodules` file to replace the SSH-based submodule URL for `circom-pairing` with an HTTPS URL. This change avoids SSH-related permission errors during submodule initialization and makes the repository easier to clone and set up in typical development environments.
+  This fork updates the internal `.gitmodules` file to replace the SSH-based submodule URL for `circom-pairing` with an HTTPS URL. This change resolves potential SSH permission issues during submodule initialization and simplifies cloning and setup in typical development environments.
 - [`circom-pairing`](https://github.com/yi-sun/circom-pairing)  
-  Required as a nested submodule inside `circom-ecdsa-p256`, used for pairing-based cryptographic operations.
+  Required as a nested submodule inside `circom-ecdsa-p256`, providing pairing-friendly elliptic curve arithmetic and bigint operations.
+- [`circom-ecdsa`](https://github.com/sommer-ph/circom-ecdsa)  
+  _Forked from [0xPARC/circom-ecdsa](https://github.com/0xPARC/circom-ecdsa)._  
+  This fork adds a prefix `K1_` to every template, function, and signal name in order to avoid naming conflicts with `circom-ecdsa-p256`. Since `circom-ecdsa-p256` was originally derived from `circom-ecdsa`, many identifiers overlapped. As Circom currently does not support namespacing, this adaptation was necessary to allow both secp256k1 and secp256r1 cryptographic operations to coexist within a single unified proof circuit.
 
 ### PTAU File Handling
 

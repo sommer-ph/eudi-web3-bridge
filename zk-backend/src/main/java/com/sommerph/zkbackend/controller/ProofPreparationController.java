@@ -3,6 +3,7 @@ package com.sommerph.zkbackend.controller;
 import com.sommerph.zkbackend.service.ProofPreparationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,111 +21,83 @@ public class ProofPreparationController {
 
     private final ProofPreparationService proofService;
 
-    // Proof composition endpoints
-
-    @Operation(summary = "Prepare all inputs for cred-bind proof")
+    @Operation(summary = "Prepare all data for credential-wallet binding proof (monolithic circuit)")
     @PostMapping("/cred-bind/{userId}")
     public ResponseEntity<?> prepareCredBindProof(@PathVariable @NotBlank String userId) {
-        log.info("Prepare cred-bind proof for user: {}", userId);
+        log.info("Prepare credential-wallet binding proof for user: {}", userId);
         try {
             proofService.prepareCredBindProof(userId);
-            return ResponseEntity.ok("Cred-bind proof prepared for user: " + userId);
+            return ResponseEntity.ok("Credential-wallet binding proof data prepared for user: " + userId);
         } catch (Exception e) {
-            log.error("Failed to prepare cred-bind proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing cred-bind proof: " + e.getMessage());
+            log.error("Failed to prepare credential-wallet binding proof for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error preparing proof: " + e.getMessage());
         }
     }
 
-    @Operation(summary = "Prepare all inputs for monolithic proof composition")
-    @PostMapping("/monolithic-composition/{userId}")
-    public ResponseEntity<?> prepareMonolithicProof(@PathVariable @NotBlank String userId) {
-        log.info("Prepare monolithic proof for user: {}", userId);
-        try {
-            proofService.prepareMonolithicProof(userId);
-            return ResponseEntity.ok("Monolithic proof prepared for user: " + userId);
-        } catch (Exception e) {
-            log.error("Failed to prepare monolithic proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing monolithic proof: " + e.getMessage());
-        }
-    }
-
-    @Operation(summary = "Prepare all inputs for recursive proof composition")
-    @PostMapping("/recursive-composition/{userId}")
-    public ResponseEntity<?> prepareRecursiveProof(@PathVariable @NotBlank String userId) {
-        log.info("Prepare recursive proof for user: {}", userId);
-        try {
-            proofService.prepareRecursiveProof(userId);
-            return ResponseEntity.ok("Recursive proof prepared for user: " + userId);
-        } catch (Exception e) {
-            log.error("Failed to prepare recursive proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing recursive proof: " + e.getMessage());
-        }
-    }
-
-    // Sub-proof endpoints
-
-    @Operation(summary = "Prepare EUDI key derivation proof inputs")
+    @Operation(summary = "Prepare EUDI wallet key derivation data")
     @PostMapping("/eudi-key-derivation/{userId}")
     public ResponseEntity<?> prepareEudiKeyDerivation(@PathVariable @NotBlank String userId) {
-        log.info("Prepare EUDI key derivation proof for user: {}", userId);
+        log.info("Prepare EUDI wallet key derivation for user: {}", userId);
         try {
-            proofService.prepareEudiKeyDerivationProof(userId);
-            return ResponseEntity.ok("EUDI key derivation proof prepared for user: " + userId);
+            proofService.prepareEudiWalletKeyDerivation(userId);
+            return ResponseEntity.ok("EUDI wallet key derivation data prepared for user: " + userId);
         } catch (Exception e) {
-            log.error("Failed to prepare EUDI key derivation proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing EUDI key derivation proof: " + e.getMessage());
+            log.error("Failed to prepare EUDI wallet key derivation for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
-    @Operation(summary = "Prepare EUDI credential public key inclusion proof inputs")
+    @Operation(summary = "Prepare EUDI credential public key check data")
     @PostMapping("/eudi-cred-pubkey/{userId}")
-    public ResponseEntity<?> prepareEudiCredPubKeyProof(@PathVariable @NotBlank String userId) {
-        log.info("Prepare EUDI credential public key inclusion proof for user: {}", userId);
+    public ResponseEntity<?> prepareEudiCredentialPublicKeyCheck(@PathVariable @NotBlank String userId) {
+        log.info("Prepare EUDI credential public key check for user: {}", userId);
         try {
-            proofService.prepareEudiCredentailPubKeyProof(userId);
-            return ResponseEntity.ok("EUDI credential public key inclusion proof prepared for user: " + userId);
+            proofService.prepareEudiCredentialPublicKeyCheck(userId);
+            return ResponseEntity.ok("EUDI credential public key check data prepared for user: " + userId);
         } catch (Exception e) {
-            log.error("Failed to prepare EUDI credential public key inclusion proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing EUDI credential public key inclusion proof: " + e.getMessage());
+            log.error("Failed to prepare EUDI credential public key check for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
-    @Operation(summary = "Prepare EUDI credential verification proof inputs")
+    @Operation(summary = "Prepare EUDI credential signature verification data")
     @PostMapping("/eudi-cred-verification/{userId}")
     public ResponseEntity<?> prepareEudiCredentialVerification(@PathVariable @NotBlank String userId) {
-        log.info("Prepare EUDI credential verification proof for user: {}", userId);
+        log.info("Prepare EUDI credential signature verification for user: {}", userId);
         try {
-            proofService.prepareEudiCredentialVerificationProof(userId);
-            return ResponseEntity.ok("EUDI credential verification proof prepared for user: " + userId);
+            proofService.prepareEudiCredentialVerification(userId);
+            return ResponseEntity.ok("EUDI credential verification data prepared for user: " + userId);
         } catch (Exception e) {
-            log.error("Failed to prepare EUDI credential verification proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing EUDI credential verification proof: " + e.getMessage());
+            log.error("Failed to prepare EUDI credential verification for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
-    @Operation(summary = "Prepare blockchain master key derivation proof inputs")
+    @Operation(summary = "Prepare Blockchain master key derivation data")
     @PostMapping("/blockchain-master-derivation/{userId}")
     public ResponseEntity<?> prepareBlockchainMasterKeyDerivation(@PathVariable @NotBlank String userId) {
-        log.info("Prepare blockchain master key derivation proof for user: {}", userId);
+        log.info("Prepare Blockchain master key derivation for user: {}", userId);
         try {
-            proofService.prepareBlockchainMasterKeyDerivationProof(userId);
-            return ResponseEntity.ok("Blockchain master key derivation proof prepared for user: " + userId);
+            proofService.prepareBlockchainWalletMasterKeyDerivation(userId);
+            return ResponseEntity.ok("Blockchain master key derivation data prepared for user: " + userId);
         } catch (Exception e) {
-            log.error("Failed to prepare blockchain master key derivation proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing blockchain master key derivation proof: " + e.getMessage());
+            log.error("Failed to prepare Blockchain master key derivation for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
-    @Operation(summary = "Prepare blockchain child key derivation proof inputs")
-    @PostMapping("/blockchain-child-derivation/{userId}")
-    public ResponseEntity<?> prepareBlockchainChildKeyDerivation(@PathVariable @NotBlank String userId) {
-        log.info("Prepare blockchain child key derivation proof for user: {}", userId);
+    @Operation(summary = "Prepare Blockchain child key derivation data")
+    @PostMapping("/blockchain-child-derivation/{userId}/{index}")
+    public ResponseEntity<?> prepareBlockchainChildKeyDerivation(
+            @PathVariable @NotBlank String userId,
+            @PathVariable @Min(0) int index) {
+        log.info("Prepare Blockchain child key derivation for user: {}, index: {}", userId, index);
         try {
-            proofService.prepareBlockchainChildKeyDerivationProof(userId);
-            return ResponseEntity.ok("Blockchain child key derivation proof prepared for user: " + userId);
+            proofService.prepareBlockchainWalletChildKeyDerivation(userId, index);
+            return ResponseEntity.ok("Blockchain child key derivation data prepared for user: " + userId + ", index: " + index);
         } catch (Exception e) {
-            log.error("Failed to prepare blockchain child key derivation proof for user: {}", userId, e);
-            return ResponseEntity.internalServerError().body("Error preparing blockchain child key derivation proof: " + e.getMessage());
+            log.error("Failed to prepare Blockchain child key derivation for user: {}, index: {}", userId, index, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
