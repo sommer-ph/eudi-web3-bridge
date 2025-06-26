@@ -13,6 +13,7 @@ import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
 @Slf4j
@@ -119,6 +120,21 @@ public class EudiKeyManagementService {
             );
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse ECDSA signature for zk-input", e);
+        }
+    }
+
+    /**
+     * Decode a key pair from base64-encoded PKCS#8 private key and X.509 public key.
+     */
+    public KeyPair decodeKeyPair(String base64Priv, String base64Pub) {
+        try {
+            byte[] privBytes = Base64.getDecoder().decode(base64Priv);
+            PrivateKey privKey = KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(privBytes));
+            byte[] pubBytes = Base64.getDecoder().decode(base64Pub);
+            PublicKey pubKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(pubBytes));
+            return new KeyPair(pubKey, privKey);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to decode EC key pair", e);
         }
     }
 
