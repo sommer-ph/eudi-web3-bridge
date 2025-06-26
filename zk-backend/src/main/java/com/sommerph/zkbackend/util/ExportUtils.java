@@ -62,7 +62,10 @@ public class ExportUtils {
         try {
             ObjectMapper mapper = new ObjectMapper();
             mapper.enable(SerializationFeature.INDENT_OUTPUT);
-            mapper.getFactory().configure(JsonGenerator.Feature.WRITE_NUMBERS_AS_STRINGS, false);
+            // For Circom input we must preserve exact limb values.
+            // Write BigInteger values as strings to avoid loss of precision
+            // when the JSON is later parsed by Node.js during witness generation.
+            mapper.getFactory().configure(JsonGenerator.Feature.WRITE_NUMBERS_AS_STRINGS, true);
 
             String path = properties.getStorage().getPath() + "/" + userId + "-credential-wallet-binding.json";
             mapper.writeValue(new File(path), binding);
