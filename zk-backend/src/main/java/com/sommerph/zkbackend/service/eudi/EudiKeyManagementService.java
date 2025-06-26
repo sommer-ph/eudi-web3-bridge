@@ -13,6 +13,7 @@ import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
 @Slf4j
@@ -55,19 +56,21 @@ public class EudiKeyManagementService {
         );
     }
 
-    public String computeKeyId(PublicKey publicKey) throws NoSuchAlgorithmException {
-        log.info("Compute public key id");
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(publicKey.getEncoded());
-        return base64url(hash);
-    }
 
     private String base64url(byte[] data) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(data);
     }
 
-    private byte[] stripLeadingZero(byte[] bytes) {
-        return (bytes.length > 0 && bytes[0] == 0x00) ? Arrays.copyOfRange(bytes, 1, bytes.length) : bytes;
+    public KeyPair decodeKeyPair(String base64Priv, String base64Pub) {
+        try {
+            byte[] privBytes = Base64.getDecoder().decode(base64Priv);
+            PrivateKey privKey = KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(privBytes));
+            byte[] pubBytes = Base64.getDecoder().decode(base64Pub);
+            PublicKey pubKey = KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(pubBytes));
+            return new KeyPair(pubKey, privKey);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to decode EC key pair", e);
+        }
     }
 
     // Circuit-related operations

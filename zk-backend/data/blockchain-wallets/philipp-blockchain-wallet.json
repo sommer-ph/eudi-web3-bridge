@@ -1,11 +1,11 @@
 {
   "userId" : "philipp",
-  "mnemonic" : "guide replace present unaware video panda lock lamp steak valley birth ribbon",
-  "base64MasterPublicKey" : "AtFkpmXWpWx4Obp9UHSL3aokgS3dppR26KV9XYLA7SDb",
-  "base64MasterSecretKey" : "jMvqj0AYdV4T4+q4wOJ/mVphsx4poUjw3XtMmMog5fY=",
+  "mnemonic" : "sad bring around chunk account spawn crowd visit ladder begin real space",
+  "base64MasterPublicKey" : "AsC8gMhOjlp2ix0fWT0MY2iE8pDUmDBC+D/QocIKcNtl",
+  "base64MasterSecretKey" : "2PH1N+bijtWJb1WUYpl2EgRmLIw+FsVtaTed41AtTj8=",
   "childKeys" : [ {
-    "publicKeyBase64" : "AvIYf++jQUl2s2JcINtwOo7N485UrqPtIb3SU+9qj04x",
-    "secretKeyBase64" : "A19h/5Ie8snXpow0hKa6xd1fX2Q1A5RCofgoNQ3YL5c=",
+    "publicKeyBase64" : "AhLCJ26NdW8fFr6gd+kyw0UxEijKwAv1Ae5TH59K5no4",
+    "secretKeyBase64" : "iARwyTK807TOIcsgOwEDNMVJ5F1DAfi51+o9K/Vp3+8=",
     "derivationIndex" : 1
   } ]
 }

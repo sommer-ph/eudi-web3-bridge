@@ -22,7 +22,7 @@ keys:
   credential:
     binding:
       algorithm: ES256
-      generate-per-credential: true
+      generate-per-credential: false
 
 eudi:
   wallet:
