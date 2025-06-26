@@ -15,6 +15,7 @@ public class LimbUtils {
     public static String[] scalarToLimbs(BigInteger scalar, int limbSizeBits, int numLimbs) {
         String[] limbs = new String[numLimbs];
         BigInteger mask = BigInteger.ONE.shiftLeft(limbSizeBits).subtract(BigInteger.ONE);
+        // Little endian representation
         for (int i = 0; i < numLimbs; i++) {
             BigInteger limb = scalar.shiftRight(i * limbSizeBits).and(mask);
             limbs[i] = limb.toString();

@@ -2,6 +2,7 @@ package com.sommerph.zkbackend.service.eudi;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sommerph.zkbackend.config.EudiCredentialConfigProperties;
+import com.sommerph.zkbackend.config.KeyConfigProperties;
 import com.sommerph.zkbackend.model.eudi.EudiCredential;
 import com.sommerph.zkbackend.model.eudi.EudiWallet;
 import com.sommerph.zkbackend.util.SignatureUtils;
@@ -24,12 +25,22 @@ public class EudiCredentialService {
     private final EudiKeyManagementService keyService;
     private final EudiWalletService walletService;
     private final EudiCredentialConfigProperties config;
+    private final KeyConfigProperties keyConfig;
 
     public EudiCredential issueCredential(String userId, Map<String, String> attributeValues) {
         log.info("Issue new SD-JWT credential for user: {}", userId);
         try {
             EudiWallet wallet = walletService.loadWallet(userId);
-            KeyPair bindingKey = keyService.generateKeyPair();
+
+            KeyPair bindingKey;
+            if (keyConfig.getCredential().getBinding().isGeneratePerCredential()) {
+                bindingKey = keyService.generateKeyPair();
+            } else {
+                bindingKey = keyService.decodeKeyPair(
+                        wallet.getBase64SecretKey(),
+                        wallet.getBase64PublicKey()
+                );
+            }
 
             List<Map<String, String>> disclosures = new ArrayList<>();
             List<String> sdHashes = new ArrayList<>();

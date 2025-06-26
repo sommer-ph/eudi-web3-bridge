@@ -28,12 +28,11 @@ template CredentialSignatureVerification () {
     component v = ECDSAVerifyNoPubkeyCheck(43, 6);
 
     for (var i = 0; i < 6; i++) {
-        // Convert inputs to big-endian for verifier
-        v.msghash[i]   <== msghash[5 - i];
-        v.r[i]         <== r[5 - i];
-        v.s[i]         <== s[5 - i];
-        v.pubkey[0][i] <== pk_I[0][5 - i];
-        v.pubkey[1][i] <== pk_I[1][5 - i];
+        v.msghash[i]   <== msghash[i];
+        v.r[i]         <== r[i];
+        v.s[i]         <== s[i];
+        v.pubkey[0][i] <== pk_I[0][i];
+        v.pubkey[1][i] <== pk_I[1][i];
     }
 
     // Require signature to be valid

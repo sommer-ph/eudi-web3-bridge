@@ -100,8 +100,8 @@ public class ProofPreparationService {
 
             String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
             String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
-                    credential.getHeader().toString(),
-                    credential.getPayload().toString()
+                    credential.getHeader(),
+                    credential.getPayload()
             );
             Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
                     java.util.Base64.getUrlDecoder().decode(credential.getSignature())

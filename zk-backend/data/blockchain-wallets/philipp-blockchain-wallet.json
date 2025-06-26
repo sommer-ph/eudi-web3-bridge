@@ -1,11 +1,11 @@
 {
   "userId" : "philipp",
-  "mnemonic" : "guide replace present unaware video panda lock lamp steak valley birth ribbon",
-  "base64MasterPublicKey" : "AtFkpmXWpWx4Obp9UHSL3aokgS3dppR26KV9XYLA7SDb",
-  "base64MasterSecretKey" : "jMvqj0AYdV4T4+q4wOJ/mVphsx4poUjw3XtMmMog5fY=",
+  "mnemonic" : "very anxiety best century term nasty tenant render year song across hazard",
+  "base64MasterPublicKey" : "AoFxThI+WAZYKqVEOkw50Th1pXFrqDSzGi2Gcb8STqc4",
+  "base64MasterSecretKey" : "P9aNWgpVcwLatCDx//0xTPc+5mJBx+Jv2DG1YKftjY0=",
   "childKeys" : [ {
-    "publicKeyBase64" : "AvIYf++jQUl2s2JcINtwOo7N485UrqPtIb3SU+9qj04x",
-    "secretKeyBase64" : "A19h/5Ie8snXpow0hKa6xd1fX2Q1A5RCofgoNQ3YL5c=",
+    "publicKeyBase64" : "As0J3zwkUL4crO/65tXWbxpA3hYEiXfNDs2PVfYAWndY",
+    "secretKeyBase64" : "PXh1DZiEuiVr0T/qp+d7gTJUzLc/3XlNDIDHCIQMq5E=",
     "derivationIndex" : 1
   } ]
 }

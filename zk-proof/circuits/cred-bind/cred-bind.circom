@@ -2,7 +2,6 @@ pragma circom 2.2.0;
 
 include "circom-ecdsa-p256/circuits/ecdsa.circom";
 include "circom-ecdsa/circuits/ecdsa.circom";
-include "circomlib/circuits/poseidon.circom";
 
 include "./c1/eudi-wallet-key-derivation.circom";
 include "./c2/credential-public-key-check.circom";
