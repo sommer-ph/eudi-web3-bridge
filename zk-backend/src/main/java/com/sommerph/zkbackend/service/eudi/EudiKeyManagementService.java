@@ -3,6 +3,7 @@ package com.sommerph.zkbackend.service.eudi;
 import com.sommerph.zkbackend.config.KeyConfigProperties;
 import com.sommerph.zkbackend.util.LimbUtils;
 import com.sommerph.zkbackend.util.SignatureUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -102,12 +103,19 @@ public class EudiKeyManagementService {
         return LimbUtils.pointToLimbsR1(x, y);
     }
 
-    public String[] computeCredentialMsgHashLimbs(String header, String payload) {
+    public String[] computeCredentialMsgHashLimbs(Map<String, Object> header, Map<String, Object> payload) {
         log.info("Compute credential message hash limbs");
-        String signingInput = header + "." + payload;
-        byte[] hash = SignatureUtils.hash(signingInput);
-        BigInteger hashInt = new BigInteger(1, hash);
-        return LimbUtils.scalarToLimbsR1(hashInt);
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            String encodedHeader = SignatureUtils.base64url(mapper.writeValueAsBytes(header));
+            String encodedPayload = SignatureUtils.base64url(mapper.writeValueAsBytes(payload));
+            String signingInput = encodedHeader + "." + encodedPayload;
+            byte[] hash = SignatureUtils.hash(signingInput);
+            BigInteger hashInt = new BigInteger(1, hash);
+            return LimbUtils.scalarToLimbsR1(hashInt);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute credential message hash", e);
+        }
     }
 
     public Map<String, String[]> extractCredentialSignatureLimbs(byte[] derSignature) {
