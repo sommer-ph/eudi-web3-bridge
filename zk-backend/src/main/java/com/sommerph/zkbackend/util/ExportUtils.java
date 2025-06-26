@@ -1,6 +1,5 @@
 package com.sommerph.zkbackend.util;
 
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sommerph.zkbackend.config.ProofPreparationProperties;
@@ -12,6 +11,8 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -62,13 +63,33 @@ public class ExportUtils {
         try {
             ObjectMapper mapper = new ObjectMapper();
             mapper.enable(SerializationFeature.INDENT_OUTPUT);
-            mapper.getFactory().configure(JsonGenerator.Feature.WRITE_NUMBERS_AS_STRINGS, false);
+
+            // Circom requires all limb values to be encoded as decimal strings so
+            // that Node.js can parse them without precision loss. Building a map
+            // of string arrays avoids relying on Jackson's number handling.
+            Map<String, Object> json = new LinkedHashMap<>();
+            json.put("pk_I", toStringArray2D(binding.getPk_I()));
+            json.put("pk_0", toStringArray2D(binding.getPk_0()));
+            json.put("sk_c", toStringArray(binding.getSk_c()));
+            json.put("pk_c", toStringArray2D(binding.getPk_c()));
+            json.put("msghash", toStringArray(binding.getMsghash()));
+            json.put("r", toStringArray(binding.getR()));
+            json.put("s", toStringArray(binding.getS()));
+            json.put("sk_0", toStringArray(binding.getSk_0()));
 
             String path = properties.getStorage().getPath() + "/" + userId + "-credential-wallet-binding.json";
-            mapper.writeValue(new File(path), binding);
+            mapper.writeValue(new File(path), json);
         } catch (Exception e) {
             throw new RuntimeException("Failed to write cred-bind export file", e);
         }
+    }
+
+    private String[] toStringArray(BigInteger[] input) {
+        return Arrays.stream(input).map(BigInteger::toString).toArray(String[]::new);
+    }
+
+    private String[][] toStringArray2D(BigInteger[][] input) {
+        return Arrays.stream(input).map(this::toStringArray).toArray(String[][]::new);
     }
 
 }
