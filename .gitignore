@@ -1,7 +1,5 @@
-# Node modules
+# Circom and Node artefacts
 **/node_modules/
-
-# Circom/zkSNARK build artefacts
 **/build/
 **/*_js/
 *.r1cs
@@ -13,6 +11,14 @@
 *.pkey.json
 generate_witness.js
 witness_calculator.js
+
+# Rust artefacts
+**/target/
+**/Cargo.lock
+/coverage/
+/*.profraw
+*.gcda
+*.gcno
 
 # OS-specific
 .DS_Store

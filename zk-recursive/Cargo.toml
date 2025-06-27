@@ -1,0 +1,14 @@
+[package]
+name = "zk-recursive"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nova-snark = { git = "https://github.com/microsoft/Nova" }
+nova-scotia = { git = "https://github.com/privacy-scaling-explorations/nova-scotia" }
+
+# arkworks core crates
+ark-std = "0.5.0"
+ark-relations = "0.5.1"
+ark-r1cs-std = "0.5.0"
+ark-ff = "0.5.0"
