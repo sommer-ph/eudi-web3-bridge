@@ -129,6 +129,33 @@ echo "OK: Proof verified successfully"
 echo
 
 ###############################################################################
+# Optional Step 8:  Generate and verify proof using Rapidsnark
+###############################################################################
+read -rp "Generate and verify proof using Rapidsnark? (y/N): " RUN_RAPIDSNARK
+
+if [[ "$RUN_RAPIDSNARK" =~ ^[Yy]$ ]]; then
+  echo
+  echo "Step 8a: Generating proof with Rapidsnark (native prover) …"
+  time_step "generate_proof_rapidsnark" \
+    prover \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.wtns" \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.proof.bin" \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.public.json"
+
+  echo
+  echo "Step 8b: Verifying proof with Rapidsnark (native verifier) …"
+  time_step "verify_proof_rapidsnark" \
+    verifier \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json" \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.public.json" \
+      "${BUILD_DIR}/${CIRCUIT_NAME}.proof.bin"
+
+  echo "OK: Proof verified successfully with Rapidsnark"
+  echo
+fi
+
+###############################################################################
 # Write perf log
 ###############################################################################
 {
