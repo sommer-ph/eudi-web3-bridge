@@ -12,8 +12,11 @@ This project contains the implementation described in the master's thesis about 
   - Creation and management of EUDI and blockchain wallets
   - Preparation of data required for zk-SNARKs
 
-- **`zk-proof/`**  
-  CLI application for generating and verifying the zk-SNARKs as described in the thesis. Proofs are constructed using Circom, compiled via SnarkJS, and executed through modular Bash scripts.
+- **`zk-monolithic/`**  
+  CLI application for generating and verifying the monolithic zk-SNARK as described in the thesis. Proofs are constructed using Circom, compiled via SnarkJS or RapidSnark, and executed through a Bash script.
+
+- **`zk-recursive/`**  
+  CLI application for generating and verifying the recursive zk-SNARK as described in the thesis. Proofs are constructed using Rust with Nova and executed through a Bash script.
 
 - **`circom_libs/`**  
   External Circom libraries, integrated via Git submodules.
@@ -67,29 +70,28 @@ This structure ensures that every proof has its corresponding input data managed
 
 ---
 
-## zk-proof
+## zk-monolithic
 
 This CLI-based system handles compilation, proof generation, and verification.
 
 ### Launch the CLI
 
 ```bash
-cd zk-proof
-./scripts/1-main.sh
+cd zk-monolithic
+./scripts/proof.sh
 ```
 
 ### Workflow
 
 After starting the CLI, the following steps are performed:
 
-1. Selection of the proof composition or sub-proof mode.
-2. Input of further parameters depending on the selected mode.
-3. Synchronization of input data from the backend.
-4. Preparation of the proof input using dedicated JS preprocessors.
-5. The system automatically executes:
+1. Selection of the user id. 
+2. Synchronization of input data from the backend.
+3. The system automatically executes:
    - Circuit compilation
-   - Groth16 trusted setup
    - Witness generation
+   - Groth16 trusted setup
+   - Verification key export
    - Proof generation and verification
    - Output storage
 
@@ -98,10 +100,8 @@ After starting the CLI, the following steps are performed:
 All generated artifacts (proofs, verification keys, public inputs, etc.) are written to:
 
 ```
-zk-proof/build/
+zk-monolithic/build/
 ```
-
-Files that are specific to a user or a single proof will have the user ID and proof identifier encoded in their filenames.
 
 ---
 
@@ -153,41 +153,9 @@ POT_FILE="${ROOT_DIR}/../ptau/${POT_NAME}"
 
 ---
 
-## Extending the zk-proof System
+## zk-recursive
 
-To add a new circuit/proof flow:
-
-### 1. Circom Circuit
-
-- Place the `.circom` file under `zk-proof/circuits/<subdirectory>/`.
-- Choose a clear naming convention (e.g., `verify-key-derivation.circom`).
-
-### 2. Bash CLI Integration
-
-- **Update `scripts/1-main.sh`:**  
-  Add the new option to the interactive menu, following the structure for existing constraints.
-- **Add JavaScript preprocessor:**  
-  Create a new `prepare-<proof-type>-<constraint>-<impl>.js` file in `scripts/input/`.  
-  This file must take the copied JSON and output a valid `input.json` for the Circom circuit.
-
-- **Update `scripts/3-prepare-input.sh`:**  
-  Map the `(constraint + impl)` selection to the correct JS preprocessor file.
-
-- **Update `scripts/4-compile-and-prove.sh`:**  
-  Extend the proof configuration matrix to include the new circuit, providing:
-  - CIRCUIT_NAME
-  - CIRCUIT_PATH
-  - INPUT_FILE
-  - OUTPUT_PREFIX (naming pattern)
-
-Refer to how `verify-p256-signature` is handled as an example.
-
-### Naming Conventions
-
-- Inputs: `input/prepared/<user>-<constraint>.json`
-- Circuits: `verify-<constraint>.circom`
-- Proof Outputs: `build/<user>_<proof-id>_proof.json`, etc.
-- Prepare Scripts: `prepare-<proof-type>-<constraint>-<impl>.js`
+Tbw...
 
 ---
 
