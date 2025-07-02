@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 nova-snark = { git = "https://github.com/microsoft/Nova" }
-nova-scotia = { git = "https://github.com/privacy-scaling-explorations/nova-scotia" }
+nova-scotia = { git = "https://github.com/nalinbhardwaj/Nova-Scotia" }
 
 # arkworks core crates
 ark-std = "0.5.0"

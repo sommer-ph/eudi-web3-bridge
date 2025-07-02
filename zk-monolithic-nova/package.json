@@ -1,0 +1,10 @@
+{
+  "name": "zk-proof",
+  "version": "1.0.0",
+  "author": "Philipp Sommer",
+  "description": "ZK proof system for EUDI-Web3",
+  "scripts": {},
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}
