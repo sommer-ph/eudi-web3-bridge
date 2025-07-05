@@ -39,8 +39,8 @@ template BlockchainWalletKeyDerivation () {
     }
 
     for (var i = 0; i < 4; i++) {
-        pk_0_struct[0][i] === keyDer.pubkey[0][i]; // TODO: zk-mpnolithic does <== instead of ===
-        pk_0_struct[1][i] === keyDer.pubkey[1][i]; // TODO: zk-mpnolithic does <== instead of ===
+        pk_0_struct[0][i] === keyDer.pubkey[0][i];
+        pk_0_struct[1][i] === keyDer.pubkey[1][i];
     }
 }
 
