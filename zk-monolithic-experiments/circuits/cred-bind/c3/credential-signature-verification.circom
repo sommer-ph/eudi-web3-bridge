@@ -38,3 +38,5 @@ template CredentialSignatureVerification () {
     // Require signature to be valid
     v.result === 1;
 }
+
+component main { public [ pk_I ] } = CredentialSignatureVerification();

@@ -37,3 +37,5 @@ template EudiWalletKeyDerivation () {
         pk_c[1][i] <== privToPub.pubkey[1][i];
     }
 }
+
+component main = EudiWalletKeyDerivation();
