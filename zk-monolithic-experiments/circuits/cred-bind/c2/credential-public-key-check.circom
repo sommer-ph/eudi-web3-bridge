@@ -28,5 +28,7 @@ template CredentialPKCheck () {
 
 }
 
+component main = CredentialPKCheck();
+
 // Note: Currently only pk_c === pk_cred is checked.
 // Note: Construction requires extracting the pk_cred from the credential.

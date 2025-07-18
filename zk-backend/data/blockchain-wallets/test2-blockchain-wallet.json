@@ -1,0 +1,11 @@
+{
+  "userId" : "test2",
+  "mnemonic" : "unfair sentence spy cement special liberty oxygen toy silly smart call guess",
+  "base64MasterPublicKey" : "A2OMi0OpjJVYQkbpg/8cqVoil6ue9Zf0QUnpiuas7gB0",
+  "base64MasterSecretKey" : "SWRgNNeVFhHJ5ie8OiU/8siV5bzMDiSb/SvNkq74oEY=",
+  "childKeys" : [ {
+    "publicKeyBase64" : "A4/MXXDmFIqROM05usGOmTv4y86qtuJlvkzEwtA3h7ie",
+    "secretKeyBase64" : "7LcTYEQSrh2ahH6XpiCQ5naHFg+x8wFJMmebgup7eh8=",
+    "derivationIndex" : 1
+  } ]
+}
