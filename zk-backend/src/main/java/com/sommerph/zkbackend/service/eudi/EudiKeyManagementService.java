@@ -7,12 +7,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPrivateKeySpec;
+import java.security.spec.ECPublicKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
@@ -22,6 +27,16 @@ import java.util.*;
 public class EudiKeyManagementService {
 
     private final KeyConfigProperties config;
+
+    // Fixed issuer key pair parameters injected from configuration
+    @Value("${keys.issuer.fixed-private}")
+    private String fixedPrivDec;
+
+    @Value("${keys.issuer.fixed-public-x}")
+    private String fixedPubXDec;
+
+    @Value("${keys.issuer.fixed-public-y}")
+    private String fixedPubYDec;
 
     @Getter
     private KeyPair issuerKeyPair;
@@ -33,7 +48,11 @@ public class EudiKeyManagementService {
     @PostConstruct
     public void init() throws GeneralSecurityException {
         log.info("Initialize issuer key pair with curve: {}", config.getCurve());
-        this.issuerKeyPair = generateKeyPair();
+        if ("generate".equalsIgnoreCase(config.getIssuer().getSource())) {
+            this.issuerKeyPair = generateKeyPair();
+        } else {
+            this.issuerKeyPair = loadFixedKeyPair();
+        }
     }
 
     public KeyPair generateKeyPair() throws GeneralSecurityException {
@@ -41,6 +60,26 @@ public class EudiKeyManagementService {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC", "BC");
         keyGen.initialize(new ECGenParameterSpec(config.getCurve()));
         return keyGen.generateKeyPair();
+    }
+
+    private KeyPair loadFixedKeyPair() throws GeneralSecurityException {
+        log.info("Load fixed issuer key pair");
+        AlgorithmParameters parameters = AlgorithmParameters.getInstance("EC");
+        parameters.init(new ECGenParameterSpec(config.getCurve()));
+        ECParameterSpec ecSpec = parameters.getParameterSpec(ECParameterSpec.class);
+
+        KeyFactory factory = KeyFactory.getInstance("EC");
+        BigInteger priv = new BigInteger(fixedPrivDec);
+        BigInteger x = new BigInteger(fixedPubXDec);
+        BigInteger y = new BigInteger(fixedPubYDec);
+
+        ECPoint w = new ECPoint(x, y);
+        ECPublicKeySpec pubSpec = new ECPublicKeySpec(w, ecSpec);
+        ECPrivateKeySpec privSpec = new ECPrivateKeySpec(priv, ecSpec);
+
+        PublicKey pubKey = factory.generatePublic(pubSpec);
+        PrivateKey privKey = factory.generatePrivate(privSpec);
+        return new KeyPair(pubKey, privKey);
     }
 
     public Map<String, Object> toJwk(PublicKey publicKey) {
