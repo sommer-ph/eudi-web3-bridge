@@ -5,12 +5,13 @@ include "circom-ecdsa/circuits/ecdsa.circom";
 
 include "./c1/eudi-wallet-key-derivation.circom";
 include "./c2/credential-public-key-check.circom";
-include "./c3/credential-signature-verification.circom";
+//include "./c3/credential-signature-verification.circom";
+include "./c3/credential-signature-verification-optimized.circom";
 include "./c4/blockchain-wallet-key-derivation.circom";
 
 template CredentialWalletBinding() {
     // Public inputs
-    signal input pk_I[2][6];
+    signal input pk_I[2][6]; // Keep pk_I as root of trust even if pk_I is not used in the circuit (optimized version)
     signal input pk_0[2][4];
 
     // Private witnesses
@@ -37,6 +38,8 @@ template CredentialWalletBinding() {
     }
 
     // C3: CredentialSignatureVerification (VerifySig(pk_I, msghash, r, s) === 1)
+    // Version using ECDSA verification with dynamic public key
+    /*
     component c3 = CredentialSignatureVerification();
     for (var i = 0; i < 6; i++) {
         c3.msghash[i] <== msghash[i];
@@ -44,6 +47,14 @@ template CredentialWalletBinding() {
         c3.s[i] <== s[i];
         c3.pk_I[0][i] <== pk_I[0][i];
         c3.pk_I[1][i] <== pk_I[1][i];
+    }
+    */
+    // Version using optimized ECDSA verification with static public key
+    component c3 = CredentialSignatureVerification();
+    for (var i = 0; i < 6; i++) {
+        c3.msghash[i] <== msghash[i];
+        c3.r[i] <== r[i];
+        c3.s[i] <== s[i];
     }
 
     // C4: BlockchainWalletKeyDerivation (pk_0 = KeyDer(sk_0))
