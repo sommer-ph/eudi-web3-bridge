@@ -5,6 +5,7 @@
   "description": "ZK proof system for EUDI-Web3",
   "scripts": {},
   "dependencies": {
-    "circomlib": "^2.0.5"
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7"
   }
 }
