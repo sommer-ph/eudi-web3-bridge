@@ -1,13 +1,18 @@
 [package]
-name    = "zk-recursive"
+name = "zk-recursive"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-plonky2       = { git = "https://github.com/sommer-ph/plonky2", branch = "main" }
+plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2" }
+plonky2_ecdsa = { git = "https://github.com/sommer-ph/plonky2-ecdsa", package = "plonky2_ecdsa" }
 
-sha2 = "0.10"
-rand = "0.9.1"
-num-bigint = "0.4"
-num-traits = "0.2"
-once_cell = "1.19"
+[patch."https://github.com/0xPolygonZero/plonky2"]
+plonky2_field = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2_field" }
+plonky2_maybe_rayon = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2_maybe_rayon" }
+plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2" }
+starky = { git = "https://github.com/sommer-ph/plonky2", package = "starky" }
+plonky2_util = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2_util" }
+
+[dev-dependencies]
+anyhow = "1"
