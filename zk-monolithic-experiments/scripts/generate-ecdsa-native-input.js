@@ -2,6 +2,18 @@ const fs = require('fs');
 const {randomBytes} = require('crypto');
 const {buildBabyjub} = require('circomlibjs');
 
+// Convert bigint to array of k limbs of n bits each
+function bigintToArray(n, k, x) {
+  const mod = 1n << BigInt(n);
+  const res = [];
+  let tmp = BigInt(x);
+  for (let i = 0; i < k; i++) {
+    res.push(tmp % mod);
+    tmp = tmp / mod;
+  }
+  return res;
+}
+
 function mod(a, m) {
   const res = a % m;
   return res >= 0n ? res : res + m;
@@ -49,13 +61,18 @@ function modInv(a, m) {
   const kinv = modInv(k, ORDER);
   const s = mod(kinv * (message + r * priv), ORDER);
 
-  // Create input for circuit (only public information)
+  const rArr = bigintToArray(64, 4, r).map(x => x.toString());
+  const sArr = bigintToArray(64, 4, s).map(x => x.toString());
+  const msgArr = bigintToArray(64, 4, message).map(x => x.toString());
+  const pubXArr = bigintToArray(64, 4, pubX).map(x => x.toString());
+  const pubYArr = bigintToArray(64, 4, pubY).map(x => x.toString());
+
+  // Create input for circuit using limb representation
   const input = {
-    message: message.toString(),
-    pubKeyX: pubX.toString(),
-    pubKeyY: pubY.toString(),
-    sigR: r.toString(),
-    sigS: s.toString()
+    r: rArr,
+    s: sArr,
+    msghash: msgArr,
+    pubkey: [pubXArr, pubYArr]
   };
 
   console.log('Generated ECDSA signature data:');
@@ -65,6 +82,7 @@ function modInv(a, m) {
   console.log('Signature R:', r.toString());
   console.log('Signature S:', s.toString());
 
-  fs.writeFileSync(__dirname + '/ecdsa-native-verification.json', JSON.stringify(input, null, 2));
-  console.log('Data saved to ecdsa-native-verification.json');
+  const outPath = __dirname + '/../input/prepared/ecdsa-native-verification.json';
+  fs.writeFileSync(outPath, JSON.stringify(input, null, 2));
+  console.log('Data saved to ' + outPath);
 })().catch(console.error);
