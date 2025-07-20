@@ -5,7 +5,9 @@
   "description": "ZK proof system for EUDI-Web3",
   "scripts": {},
   "dependencies": {
+    "@noble/curves": "^1.9.4",
     "circomlib": "^2.0.5",
-    "circomlibjs": "^0.1.7"
+    "circomlibjs": "^0.1.7",
+    "crypto": "^1.0.1"
   }
 }
