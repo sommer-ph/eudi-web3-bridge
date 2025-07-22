@@ -6,6 +6,7 @@
   "scripts": {},
   "dependencies": {
     "@noble/curves": "^1.9.4",
+    "babyjubjub-ecdsa": "^1.2.0",
     "circomlib": "^2.0.5",
     "circomlibjs": "^0.1.7",
     "crypto": "^1.0.1"
