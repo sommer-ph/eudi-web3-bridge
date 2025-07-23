@@ -39,10 +39,10 @@ async function generateSignatureVerificationInputs() {
 // Generate inputs and save to JSON file
 async function main() {
     const inputs = await generateSignatureVerificationInputs();
-    const outputPath = 'input/prepared/eddsa-signature-verification.json';
+    const outputPath = 'input/snark-friendly/eddsa/eddsa-signature-verification.json';
 
     // Ensure directory exists
-    const dir = 'input/prepared';
+    const dir = 'input/snark-friendly/eddsa';
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }

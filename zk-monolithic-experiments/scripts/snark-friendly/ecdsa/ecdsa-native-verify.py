@@ -224,12 +224,17 @@ try:
     }
 
     # Save to file for Circom circuit testing
-    with open("ecdsa-native-verify.json", "w") as f:
+    import os
+    output_dir = "input/snark-friendly/ecdsa"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "ecdsa-native-verify.json")
+    
+    with open(output_path, "w") as f:
         json.dump(output_data, f, indent=4)
 
     # Verification
     valid = ecdsa_verify(pub_key, msg_hash, (r, s))
-    print(f"Data saved to ecdsa-native-verify.json. Verification: {valid}")
+    print(f"Data saved to {output_path}. Verification: {valid}")
 
 except ValueError as e:
     print(f"Error in signature generation: {e}")
@@ -248,7 +253,12 @@ except ValueError as e:
         "q3": "0"
     }
 
-    with open("ecdsa-native-verify.json", "w") as f:
+    import os
+    output_dir = "input/snark-friendly/ecdsa"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "ecdsa-native-verify.json")
+    
+    with open(output_path, "w") as f:
         json.dump(output_data, f, indent=4)
 
-    print("Fallback test vector saved to ecdsa-native-verify.json")
+    print(f"Fallback test vector saved to {output_path}")

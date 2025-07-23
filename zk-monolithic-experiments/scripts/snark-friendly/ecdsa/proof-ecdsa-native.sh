@@ -3,17 +3,17 @@ set -euo pipefail
 
 echo
 echo "------------------------------------------------------"
-echo " zk-Proof CLI – EdDSA Key Derivation"
+echo " zk-Proof CLI – Native ECDSA Signature Verification"
 echo "------------------------------------------------------"
 echo
 
 ###############################################################################
 # Paths and constants
 ###############################################################################
-CIRCUIT_NAME="key-derivation"
+CIRCUIT_NAME="main"
 BUILD_DIR="build"
-INPUT_DIR="input/prepared"
-DEST_FILE="${INPUT_DIR}/eddsa-key-derivation.json"
+INPUT_DIR="input/snark-friendly/ecdsa"
+DEST_FILE="${INPUT_DIR}/ecdsa-native-verify.json"
 POT_FILE="../ptau/powersOfTau28_hez_final_22.ptau"
 
 mkdir -p "$INPUT_DIR" "$BUILD_DIR"
@@ -44,7 +44,7 @@ time_step() {
 # Step 1: Compile circuit
 ###############################################################################
 echo "Step 1: Compiling circuit …"
-time_step "compile_circuit" circom "circuits/snark-friendly/eddsa/${CIRCUIT_NAME}.circom" \
+time_step "compile_circuit" circom "circuits/snark-friendly/ecdsa/${CIRCUIT_NAME}.circom" \
   --r1cs --wasm --sym \
   -l ../circom_libs -l node_modules \
   -o "$BUILD_DIR"
@@ -52,9 +52,17 @@ echo "OK: Circuit compiled"
 echo
 
 ###############################################################################
-# Step 2: Generate witness
+# Step 2: Generate input data
 ###############################################################################
-echo "Step 2: Generating witness …"
+echo "Step 2: Generating input data …"
+time_step "generate_input" python3 "scripts/snark-friendly/ecdsa/ecdsa-native-verify.py"
+echo "OK: Input data generated"
+echo
+
+###############################################################################
+# Step 3: Generate witness
+###############################################################################
+echo "Step 3: Generating witness …"
 time_step "generate_witness" node "${BUILD_DIR}/${CIRCUIT_NAME}_js/generate_witness.js" \
   "${BUILD_DIR}/${CIRCUIT_NAME}_js/${CIRCUIT_NAME}.wasm" \
   "$DEST_FILE" \
@@ -63,9 +71,9 @@ echo "OK: Witness generated"
 echo
 
 ###############################################################################
-# Step 3: Trusted setup
+# Step 4: Trusted setup
 ###############################################################################
-echo "Step 3: Running Groth16 trusted setup …"
+echo "Step 4: Running Groth16 trusted setup …"
 time_step "trusted_setup" snarkjs groth16 setup \
   "${BUILD_DIR}/${CIRCUIT_NAME}.r1cs" \
   "$POT_FILE" \
@@ -74,9 +82,9 @@ echo "OK: Trusted setup completed"
 echo
 
 ###############################################################################
-# Step 4: Export verification key
+# Step 5: Export verification key
 ###############################################################################
-echo "Step 4: Exporting verification key …"
+echo "Step 5: Exporting verification key …"
 time_step "export_vk" snarkjs zkey export verificationkey \
   "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
   "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json"
@@ -84,9 +92,9 @@ echo "OK: Verification key exported"
 echo
 
 ###############################################################################
-# Step 5: Generate proof
+# Step 6: Generate proof
 ###############################################################################
-echo "Step 5: Generating proof …"
+echo "Step 6: Generating proof …"
 time_step "generate_proof" snarkjs groth16 prove \
   "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
   "${BUILD_DIR}/${CIRCUIT_NAME}.wtns" \
@@ -96,9 +104,9 @@ echo "OK: Proof generated"
 echo
 
 ###############################################################################
-# Step 6: Verify proof
+# Step 7: Verify proof
 ###############################################################################
-echo "Step 6: Verifying proof …"
+echo "Step 7: Verifying proof …"
 time_step "verify_proof" snarkjs groth16 verify \
   "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json" \
   "${BUILD_DIR}/${CIRCUIT_NAME}.public.json" \
@@ -107,13 +115,13 @@ echo "OK: Proof verified successfully"
 echo
 
 ###############################################################################
-# Optional Step 7:  Generate and verify proof using Rapidsnark
+# Optional Step 8:  Generate and verify proof using Rapidsnark
 ###############################################################################
 read -rp "Generate and verify proof using Rapidsnark? (y/N): " RUN_RAPIDSNARK
 
 if [[ "$RUN_RAPIDSNARK" =~ ^[Yy]$ ]]; then
   echo
-  echo "Step 7a: Generating proof with Rapidsnark (native prover) …"
+  echo "Step 8a: Generating proof with Rapidsnark (native prover) …"
   time_step "generate_proof_rapidsnark" \
     prover \
       "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
@@ -122,7 +130,7 @@ if [[ "$RUN_RAPIDSNARK" =~ ^[Yy]$ ]]; then
       "${BUILD_DIR}/${CIRCUIT_NAME}.public.json"
 
   echo
-  echo "Step 7b: Verifying proof with Rapidsnark (native verifier) …"
+  echo "Step 8b: Verifying proof with Rapidsnark (native verifier) …"
   time_step "verify_proof_rapidsnark" \
     verifier \
       "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json" \

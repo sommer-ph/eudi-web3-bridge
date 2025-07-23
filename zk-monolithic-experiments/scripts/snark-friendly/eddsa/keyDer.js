@@ -32,10 +32,10 @@ async function generateKeyDerivationInputs() {
 // Generate inputs and save to JSON file
 async function main() {
     const inputs = await generateKeyDerivationInputs();
-    const outputPath = 'input/prepared/eddsa-key-derivation.json';
+    const outputPath = 'input/snark-friendly/eddsa/eddsa-key-derivation.json';
 
     // Ensure directory exists
-    const dir = 'input/prepared';
+    const dir = 'input/snark-friendly/eddsa';
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }

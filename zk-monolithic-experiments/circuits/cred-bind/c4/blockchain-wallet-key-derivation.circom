@@ -21,6 +21,9 @@ template BlockchainWalletKeyDerivation () {
     signal input sk_0[4];
     signal input pk_0[8];
 
+    // Output
+    signal output valid;
+
     // Internal signal
     signal pk_0_struct[2][4];
 
@@ -42,6 +45,9 @@ template BlockchainWalletKeyDerivation () {
         pk_0_struct[0][i] === keyDer.pubkey[0][i];
         pk_0_struct[1][i] === keyDer.pubkey[1][i];
     }
+
+    // Output valid signal
+    valid <== 1;
 }
 
 component main { public [ pk_0 ] } = BlockchainWalletKeyDerivation();

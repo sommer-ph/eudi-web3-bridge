@@ -23,6 +23,9 @@ template CredentialSignatureVerification () {
     signal input r[6];
     signal input s[6];
 
+    // Output
+    signal output valid;
+
     // Verification component
     component v = ECDSAVerifyFixedPubkey(43, 6);
 
@@ -34,6 +37,9 @@ template CredentialSignatureVerification () {
 
     // Require signature to be valid
     v.result === 1;
+    
+    // Output valid signal
+    valid <== 1;
 }
 
 component main = CredentialSignatureVerification();
