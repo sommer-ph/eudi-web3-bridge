@@ -1,6 +1,7 @@
 # Circom and Node artefacts
 **/node_modules/
 **/build/
+**/build_debug/
 **/*_js/
 *.r1cs
 *.wasm
@@ -27,3 +28,4 @@ Thumbs.db
 # IDEs/editors
 .vscode/
 .idea/
+.claude/

@@ -1,14 +1,13 @@
 {
-  "name": "zk-proof",
+  "name": "zk-monolithic-experiments",
   "version": "1.0.0",
-  "author": "Philipp Sommer",
-  "description": "ZK proof system for EUDI-Web3",
-  "scripts": {},
+  "description": "Experiments for monolithic implementation",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "@noble/curves": "^1.9.4",
-    "babyjubjub-ecdsa": "^1.2.0",
     "circomlib": "^2.0.5",
-    "circomlibjs": "^0.1.7",
-    "crypto": "^1.0.1"
-  }
+    "circomlibjs": "^0.1.7"
+  },
+  "author": "Philipp Sommer"
 }

@@ -29,6 +29,8 @@ template VerifyEcdsaSignature(bits) {
     signal input q1;
     signal input q2;
     signal input q3;
+
+    signal output valid;
         
     component verify = ECDSAVerify(bits);
     verify.z <== z;
@@ -40,6 +42,7 @@ template VerifyEcdsaSignature(bits) {
     verify.q1 <== q1;
     verify.q2 <== q2;
     verify.q3 <== q3;
+    valid <== verify.valid;
 }
 
-component main = VerifyEcdsaSignature(254);
+component main { public [ Qx, Qy ] } = VerifyEcdsaSignature(254);

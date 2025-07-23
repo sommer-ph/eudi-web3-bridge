@@ -1,11 +1,20 @@
-// ecdsa.circom  —  Dummy‑Curve y² = x³ + 3  (BN254, G = (1,2))
-
-// BN254 Curve y² = x³ + 3 over F_p with proper field arithmetic
-
 pragma circom 2.1.0;
 
 include "circomlib/circuits/comparators.circom";
 include "circomlib/circuits/bitify.circom";
+
+/*
+ * ECDSA Verification Circuit for BN254 Curve
+ *
+ * This circuit implements ECDSA signature verification on the BN254 elliptic curve.
+ * Key components:
+ * - Point arithmetic templates (PointAdd, PointDouble, ScalarMul)
+ * - Curve validation (PointOnCurve)
+ * - ECDSA verification with precomputed quotients for efficiency
+ *
+ * Note: Uses quotients (q1, q2, q3) as inputs to handle modular arithmetic
+ * efficiently in the zk-SNARK constraint system.
+ */
 
 function TestCurve_getGx() { return 1; }
 function TestCurve_getGy() { return 2; }
@@ -16,6 +25,11 @@ function TestCurve_getP()  {
     return 21888242871839275222246405745257275088696311157297823662689037894645226208583;
 }
 
+/*
+ * Elliptic curve point addition
+ * Implements the standard EC point addition formula for distinct points
+ * Fails if points are identical (use PointDouble) or if denominator is zero
+ */
 template PointAdd() {
     signal input x1; 
     signal input y1;
@@ -49,6 +63,11 @@ template PointAdd() {
     y3 <== lambda_dx - y1;
 }
 
+/*
+ * Elliptic curve point doubling
+ * Implements point doubling for P + P using tangent line method
+ * Used when adding a point to itself
+ */
 template PointDouble() {
     signal input x; 
     signal input y;
@@ -83,6 +102,11 @@ template PointDouble() {
     y3 <== lambda_dx - y;
 }
 
+/*
+ * Scalar multiplication using double-and-add algorithm
+ * Computes k * P efficiently by processing k bit by bit
+ * Uses conditional selection to avoid branching in the circuit
+ */
 template ScalarMul(bits) {
     assert(bits > 0); 
     assert(bits <= 254);
@@ -142,12 +166,15 @@ template ScalarMul(bits) {
     Ry <== y[bits-1];
 }
 
+/*
+ * Validates that a point lies on the BN254 curve
+ * Checks the curve equation y² = x³ + 3
+ * Critical for ensuring input points are valid
+ */
 template PointOnCurve() {
     signal input x; 
     signal input y; 
 
-    // Direct constraint: y² = x³ + 3 (no output needed)
-    // Circom automatically handles modular arithmetic in the BN254 field
     signal x_sq; 
     x_sq <== x * x;
     signal x_cu; 
@@ -157,10 +184,19 @@ template PointOnCurve() {
     signal lhs;  
     lhs  <== y * y;
 
-    // Direct equality constraint instead of IsEqual component
     lhs === rhs;
 }
 
+/*
+ * ECDSA signature verification template
+ * 
+ * Verifies an ECDSA signature using precomputed quotients for efficiency.
+ * This is NOT standard ECDSA as quotients are provided as inputs rather
+ * than computed internally, which is necessary for zk-SNARK optimization.
+ *
+ * WARNING: Providing quotients as inputs means this circuit cannot enforce
+ * the full security properties of ECDSA verification.
+ */
 template ECDSAVerify(bits) {
     assert(bits == 254);
 
@@ -173,6 +209,8 @@ template ECDSAVerify(bits) {
     signal input q1;    // Quotient q1 = floor((z * w) / n) provided as input --> ECDSA-violation!
     signal input q2;    // Quotient q2 = floor((r * w) / n) provided as input --> ECDSA-violation!
     signal input q3;    // provided as input --> ECDSA-violation!
+
+    signal output valid;
 
     // Curve order (BN254)
     var n = TestCurve_getN();
@@ -236,5 +274,9 @@ template ECDSAVerify(bits) {
     q3n  <== q3 * n;
     signal rx_mod;
     rx_mod <== sum.x3 - q3n;
-    rx_mod === r;
+    //rx_mod === r;
+    component isEqual = IsEqual();
+    isEqual.in[0] <== rx_mod;
+    isEqual.in[1] <== r;
+    valid <== isEqual.out;
 }
