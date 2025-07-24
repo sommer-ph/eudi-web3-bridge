@@ -22,7 +22,7 @@ read -rp "Enter user ID: " USER_ID
 ###############################################################################
 CIRCUIT_NAME="cred-bind"
 BUILD_DIR="build"
-INPUT_DIR="input/cred-bind"
+INPUT_DIR="input/prepared"
 SRC_FILE="../zk-backend/data/proof-preparation/${USER_ID}-credential-wallet-binding.json"
 DEST_FILE="${INPUT_DIR}/${USER_ID}-credential-wallet-binding.json"
 POT_FILE="../ptau/powersOfTau28_hez_final_22.ptau"
@@ -90,11 +90,11 @@ echo
 ###############################################################################
 # Step 4: Trusted setup
 ###############################################################################
-echo "Step 4: Running Groth16 trusted setup …"
-time_step "trusted_setup" $SNARKJS groth16 setup \
+echo "Step 4: Running PLONK trusted setup …"
+time_step "trusted_setup" $SNARKJS plonk setup \
   "${BUILD_DIR}/${CIRCUIT_NAME}.r1cs" \
   "$POT_FILE" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.zkey"
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.zkey"
 echo "OK: Trusted setup completed"
 echo
 
@@ -103,8 +103,8 @@ echo
 ###############################################################################
 echo "Step 5: Exporting verification key …"
 time_step "export_vk" $SNARKJS zkey export verificationkey \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json"
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.zkey" \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.vkey.json"
 echo "OK: Verification key exported"
 echo
 
@@ -112,11 +112,11 @@ echo
 # Step 6: Generate proof
 ###############################################################################
 echo "Step 6: Generating proof …"
-time_step "generate_proof" $SNARKJS groth16 prove \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
+time_step "generate_proof" $SNARKJS plonk prove \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.zkey" \
   "${BUILD_DIR}/${CIRCUIT_NAME}.wtns" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.proof.json" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.public.json"
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.proof.json" \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.public.json"
 echo "OK: Proof generated"
 echo
 
@@ -124,39 +124,12 @@ echo
 # Step 7: Verify proof
 ###############################################################################
 echo "Step 7: Verifying proof …"
-time_step "verify_proof" $SNARKJS groth16 verify \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.public.json" \
-  "${BUILD_DIR}/${CIRCUIT_NAME}.proof.json"
+time_step "verify_proof" $SNARKJS plonk verify \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.vkey.json" \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.public.json" \
+  "${BUILD_DIR}/${CIRCUIT_NAME}.plonk.proof.json"
 echo "OK: Proof verified successfully"
 echo
-
-###############################################################################
-# Optional Step 8:  Generate and verify proof using Rapidsnark
-###############################################################################
-read -rp "Generate and verify proof using Rapidsnark? (y/N): " RUN_RAPIDSNARK
-
-if [[ "$RUN_RAPIDSNARK" =~ ^[Yy]$ ]]; then
-  echo
-  echo "Step 8a: Generating proof with Rapidsnark (native prover) …"
-  time_step "generate_proof_rapidsnark" \
-    prover \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.zkey" \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.wtns" \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.proof.bin" \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.public.json"
-
-  echo
-  echo "Step 8b: Verifying proof with Rapidsnark (native verifier) …"
-  time_step "verify_proof_rapidsnark" \
-    verifier \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.vkey.json" \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.public.json" \
-      "${BUILD_DIR}/${CIRCUIT_NAME}.proof.bin"
-
-  echo "OK: Proof verified successfully with Rapidsnark"
-  echo
-fi
 
 ###############################################################################
 # Write perf log
