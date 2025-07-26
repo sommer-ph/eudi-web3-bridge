@@ -4,6 +4,7 @@ import com.sommerph.zkbackend.model.eudi.EudiWallet;
 import com.sommerph.zkbackend.model.eudi.EudiCredential;
 import com.sommerph.zkbackend.model.blockchain.BlockchainWallet;
 import com.sommerph.zkbackend.model.proofPreparation.monolithic.*;
+import com.sommerph.zkbackend.model.proofPreparation.recursive.*;
 import com.sommerph.zkbackend.repository.proofPreparation.ProofPreparationRegistry;
 import com.sommerph.zkbackend.service.eudi.EudiKeyManagementService;
 import com.sommerph.zkbackend.service.eudi.EudiWalletService;
@@ -149,6 +150,75 @@ public class ProofPreparationService {
             proofPreparationRegistry.saveBlockchainWalletKeyDerivation(data);
         } catch (Exception e) {
             throw new RuntimeException("Error preparing blockchain key derivation for user: " + userId, e);
+        }
+    }
+
+    public void prepareRecursiveProofs(String userId) {
+        log.info("Prepare all recursive proof data for user: {}", userId);
+        prepareInnerProof(userId);
+        prepareOuterProof(userId);
+    }
+
+    // Recursive inner proof
+    public void prepareInnerProof(String userId) {
+        log.info("Prepare inner proof data for recursive proof for user: {}", userId);
+        try {
+            EudiWallet wallet = eudiWalletService.loadWallet(userId);
+            EudiCredential credential = wallet.getCredentials().get(0);
+
+            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
+                    credential.getHeader(),
+                    credential.getPayload()
+            );
+            String msg = "0x" + String.join("", msgHashLimbs);
+
+            Object cnfObj = credential.getPayload().get("cnf");
+            Map<String, Object> cnfMap = (Map<String, Object>) cnfObj;
+            Map<String, Object> jwkMap = (Map<String, Object>) cnfMap.get("jwk");
+            String[][] pkCredLimbs = eudiKeyManagementService.getCredentialBindingKeyJwkLimbs(jwkMap);
+
+            String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
+
+            Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
+                    java.util.Base64.getUrlDecoder().decode(credential.getSignature())
+            );
+
+            String[] skCredLimbs = eudiKeyManagementService.getUserCredentialSecretKeyLimbs(wallet.getBase64SecretKey());
+
+            InnerProofInput innerInput = new InnerProofInput(
+                    userId,
+                    msg,
+                    new InnerProofInput.PublicKeyPoint("0x" + String.join("", pkCredLimbs[0]), "0x" + String.join("", pkCredLimbs[1])),
+                    new InnerProofInput.PublicKeyPoint("0x" + String.join("", pkILimbs[0]), "0x" + String.join("", pkILimbs[1])),
+                    new InnerProofInput.Signature("0x" + String.join("", sigLimbs.get("r")), "0x" + String.join("", sigLimbs.get("s"))),
+                    "0x" + String.join("", skCredLimbs)
+            );
+
+            exportUtils.writeInnerProofToFile(innerInput, userId);
+        } catch (Exception e) {
+            throw new RuntimeException("Error preparing inner proof data for user: " + userId, e);
+        }
+    }
+
+    // Recursive outer proof
+    public void prepareOuterProof(String userId) {
+        log.info("Prepare outer proof data for recursive proof for user: {}", userId);
+        try {
+            BlockchainWallet wallet = blockchainWalletService.loadWallet(userId);
+            DeterministicKey key = blockchainKeyManagementService.deriveChildKey(wallet.getMnemonic(), 0);
+            
+            String[] skLimbs = blockchainKeyManagementService.getSecretKeyLimbs(key);
+            String[][] pkLimbs = blockchainKeyManagementService.getPublicKeyLimbs(key);
+
+            OuterProofInput outerInput = new OuterProofInput(
+                    userId,
+                    "0x" + String.join("", skLimbs),
+                    new OuterProofInput.PublicKeyPoint("0x" + String.join("", pkLimbs[0]), "0x" + String.join("", pkLimbs[1]))
+            );
+
+            exportUtils.writeOuterProofToFile(outerInput, userId);
+        } catch (Exception e) {
+            throw new RuntimeException("Error preparing outer proof data for user: " + userId, e);
         }
     }
 

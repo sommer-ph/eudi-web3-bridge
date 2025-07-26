@@ -111,6 +111,6 @@ public class JsonFileProofPreparationRegistry implements ProofPreparationRegistr
         return Files.exists(storageDir.resolve(filename));
     }
 
-    // For every new model in proofPreparation that represent a high-level constraint, implement methods for save, load, and exists as specified in interface.
+    // For every new model in proofPreparation, implement methods for save, load, and exists as specified in interface.
     // Note: File naming convention is <userId>-<modelName>.json
 }

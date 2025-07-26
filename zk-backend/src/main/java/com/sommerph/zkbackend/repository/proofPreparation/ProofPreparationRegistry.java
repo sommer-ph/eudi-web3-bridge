@@ -25,6 +25,5 @@ public interface ProofPreparationRegistry {
     BlockchainKeyDerivation loadBlockchainWalletKeyDerivation(String userId);
     boolean existsBlockchainWalletKeyDerivation(String userId);
 
-
     // For every new model in proofPreparation that represents a high-level constraint, add methods for save, load, and exists.
 }

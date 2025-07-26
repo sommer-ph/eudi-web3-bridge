@@ -101,4 +101,43 @@ public class ProofPreparationController {
         }
     }
 
+    @Operation(summary = "Prepare all recursive proof data (inner and outer)")
+    @PostMapping("/recursive/all/{userId}")
+    public ResponseEntity<?> prepareRecursiveProofs(@PathVariable @NotBlank String userId) {
+        log.info("Prepare all recursive proofs for user: {}", userId);
+        try {
+            proofService.prepareRecursiveProofs(userId);
+            return ResponseEntity.ok("All recursive proof data prepared for user: " + userId);
+        } catch (Exception e) {
+            log.error("Failed to prepare recursive proofs for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "Prepare inner proof data for recursive proof generation")
+    @PostMapping("/recursive/inner/{userId}")
+    public ResponseEntity<?> prepareInnerProof(@PathVariable @NotBlank String userId) {
+        log.info("Prepare inner proof for recursive proof for user: {}", userId);
+        try {
+            proofService.prepareInnerProof(userId);
+            return ResponseEntity.ok("Inner proof data prepared for user: " + userId);
+        } catch (Exception e) {
+            log.error("Failed to prepare inner proof for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "Prepare outer proof data for recursive proof generation")
+    @PostMapping("/recursive/outer/{userId}")
+    public ResponseEntity<?> prepareOuterProof(@PathVariable @NotBlank String userId) {
+        log.info("Prepare outer proof for recursive proof for user: {}", userId);
+        try {
+            proofService.prepareOuterProof(userId);
+            return ResponseEntity.ok("Outer proof data prepared for user: " + userId);
+        } catch (Exception e) {
+            log.error("Failed to prepare outer proof for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
 }
