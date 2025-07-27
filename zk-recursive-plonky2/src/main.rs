@@ -1,4 +1,4 @@
-use zk_recursive::{build_inner_circuit, build_outer_circuit};
+use zk_recursive::{build_inner_circuit, build_outer_circuit, build_outer_p256_circuit};
 use zk_recursive::{InnerProofInput, OuterProofInput};
 use std::fs;
 use std::path::Path;
@@ -35,6 +35,11 @@ enum Commands {
     },
     /// Load inner artifacts + build outer circuit + generate outer proof + verify
     Outer {
+        #[arg(short, long, help = "Input JSON file with outer proof data")]
+        input: String,
+    },
+    /// Load inner artifacts + build P256 outer circuit + generate outer proof + verify
+    OuterP256 {
         #[arg(short, long, help = "Input JSON file with outer proof data")]
         input: String,
     },
@@ -129,13 +134,38 @@ fn main() -> Result<()> {
             println!("Outer circuit build time: {:?}", outer_total);
             
             println!("\n=== GENERATING OUTER PROOF ===");
-            generate_outer_proof_optimized(&outer, &inner.data.verifier_only, &input, &build_dir)?;
+            generate_outer_proof(&outer, &inner.data.verifier_only, &input, &build_dir)?;
+        },
+        Some(Commands::OuterP256 { input }) => {
+            // Check that inner proof exists first
+            let inner_proof_path = build_dir.join("inner_proof.bin");
+            
+            if !inner_proof_path.exists() {
+                return Err(anyhow::anyhow!("Inner proof not found. Run 'inner' command first to generate it."));
+            }
+            
+            // Build inner circuit once (needed for both CommonCircuitData and VerifierData)
+            // Note: Plonky2's VerifierOnlyCircuitData cannot be serialized, so we must rebuild
+            println!("\nBuilding inner circuit (needed for P256 outer circuit)...");
+            let inner_start = Instant::now();
+            let inner = build_inner_circuit();
+            println!("Inner circuit build time: {:?}", inner_start.elapsed());
+            
+            println!("\nBuilding P256 outer circuit...");
+            let outer_start = Instant::now();
+            let outer = build_outer_p256_circuit(&inner.data.common);
+            let outer_total = outer_start.elapsed();
+            println!("P256 outer circuit build time: {:?}", outer_total);
+            
+            println!("\n=== GENERATING P256 OUTER PROOF ===");
+            generate_outer_p256_proof(&outer, &inner.data.verifier_only, &input, &build_dir)?;
         },
         None => {
-            println!("\nNo command specified. Use 'inner' or 'outer' subcommands.");
+            println!("\nNo command specified. Use 'inner', 'outer', or 'outer-p256' subcommands.");
             println!("Examples:");
             println!("  cargo run -- inner --input inputs/inner_input.json");
             println!("  cargo run -- outer --input inputs/outer_input.json");
+            println!("  cargo run -- outer-p256 --input inputs/outer_input.json");
         }
     }
     
@@ -214,7 +244,7 @@ fn generate_inner_proof(
     Ok(())
 }
 
-fn generate_outer_proof_optimized(
+fn generate_outer_proof(
     outer: &zk_recursive::OuterCircuit,
     inner_verifier: &plonky2::plonk::circuit_data::VerifierOnlyCircuitData<Cfg, D>,
     input_file: &str,
@@ -284,6 +314,80 @@ fn generate_outer_proof_optimized(
     
     println!("Outer proof generation completed in: {:?}", start.elapsed());
     println!("Recursive proof system complete!");
+    
+    Ok(())
+}
+
+fn generate_outer_p256_proof(
+    outer: &zk_recursive::OuterP256Circuit,
+    inner_verifier: &plonky2::plonk::circuit_data::VerifierOnlyCircuitData<Cfg, D>,
+    input_file: &str,
+    build_dir: &Path,
+) -> Result<()> {
+    use std::time::Instant;
+    
+    println!("Loading outer P256 input data from: {}", input_file);
+    let input_data = fs::read_to_string(input_file)?;
+    let input: OuterProofInput = serde_json::from_str(&input_data)?;
+    
+    // Load inner proof artifacts
+    println!("Loading inner proof artifacts...");
+    let load_start = Instant::now();
+    let inner_proof_data = fs::read(build_dir.join("inner_proof.bin"))
+        .map_err(|_| anyhow::anyhow!("Inner proof not found. Run 'inner' command first."))?;
+    let inner_proof: plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D> = 
+        bincode::deserialize(&inner_proof_data)?;
+    println!("Inner proof load + deserialization time: {:?}", load_start.elapsed());
+    
+    println!("Inner proof loaded: {} bytes", inner_proof_data.len());
+    println!("Using pre-loaded inner verifier data (optimized path)");
+    
+    let start = Instant::now();
+    
+    // Parse outer proof inputs (using P256Scalar instead of Secp256K1Scalar)
+    let sk0 = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk0));
+    let pk0_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.x));
+    let pk0_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.y));
+    
+    // Set up outer P256 circuit witness
+    let mut pw = PartialWitness::<F>::new();
+    
+    pw.set_biguint_target(&outer.targets.pk0.x.value, &pk0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk0.y.value, &pk0_y.to_canonical_biguint())?;
+    set_nonnative_target(&mut pw, &outer.targets.sk0, sk0)?;
+    pw.set_proof_with_pis_target(&outer.targets.proof, &inner_proof)?;
+    pw.set_verifier_data_target(&outer.targets.vd, &inner_verifier)?;
+    
+    // Generate outer P256 proof
+    println!("Generating outer P256 recursive proof...");
+    let proof_start = Instant::now();
+    
+    println!("- Initializing recursive prover and verifying inner proof...");
+    let recursive_start = Instant::now();
+    let proof = outer.data.prove(pw)?;
+    let recursive_time = recursive_start.elapsed();
+    
+    let proof_time = proof_start.elapsed();
+    println!("- Recursive prover + verification time: {:?}", recursive_time);
+    println!("Outer P256 proof total generation time: {:?}", proof_time);
+    println!("Outer P256 proof size: {} bytes", proof.to_bytes().len());
+    
+    // Verify outer P256 proof
+    println!("Verifying outer P256 proof...");
+    let verify_start = Instant::now();
+    outer.data.verify(proof.clone())?;
+    println!("Outer P256 proof verification time: {:?}", verify_start.elapsed());
+    
+    // Save outer P256 proof
+    println!("Serializing and saving outer P256 proof...");
+    let save_start = Instant::now();
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("outer_p256_proof.bin"), &proof_data)?;
+    println!("Outer P256 proof serialization + save time: {:?}", save_start.elapsed());
+    println!("Outer P256 proof saved: {} bytes", proof_data.len());
+    
+    println!("Outer P256 proof generation completed in: {:?}", start.elapsed());
+    println!("Recursive P256 proof system complete!");
     
     Ok(())
 }
