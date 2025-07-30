@@ -1,4 +1,4 @@
-use zk_recursive::{build_inner_circuit, build_outer_circuit, build_outer_p256_circuit};
+use zk_recursive::{build_inner_circuit, build_outer_circuit, build_outer_p256_circuit, build_outer_only_circuit};
 use zk_recursive::{InnerProofInput, OuterProofInput};
 use std::fs;
 use std::path::Path;
@@ -43,6 +43,11 @@ enum Commands {
         #[arg(short, long, help = "Input JSON file with outer proof data")]
         input: String,
     },
+    /// Build outer-only circuit (no inner verification) + generate proof + verify
+    OuterOnly {
+        #[arg(short, long, help = "Input JSON file with outer proof data")]
+        input: String,
+    },
 }
 
 fn hex_to_bigint(hex_str: &str) -> num_bigint::BigUint {
@@ -62,7 +67,6 @@ where
     pw.set_biguint_target(&target.value, &value.to_canonical_biguint())?;
     Ok(())
 }
-
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -160,12 +164,24 @@ fn main() -> Result<()> {
             println!("\n=== GENERATING P256 OUTER PROOF ===");
             generate_outer_p256_proof(&outer, &inner.data.verifier_only, &input, &build_dir)?;
         },
+        Some(Commands::OuterOnly { input }) => {
+            println!("\nBuilding outer-only circuit (no inner verification)...");
+            let outer_start = Instant::now();
+            let outer = build_outer_only_circuit();
+            let outer_total = outer_start.elapsed();
+            println!("Outer-only circuit build time: {:?}", outer_total);
+            println!("Outer-only circuit size: {} gates", outer.data.common.degree());
+            
+            println!("\n=== GENERATING OUTER-ONLY PROOF ===");
+            generate_outer_only_proof(&outer, &input, &build_dir)?;
+        },
         None => {
-            println!("\nNo command specified. Use 'inner', 'outer', or 'outer-p256' subcommands.");
+            println!("\nNo command specified. Use 'inner', 'outer', 'outer-p256', or 'outer-only' subcommands.");
             println!("Examples:");
             println!("  cargo run -- inner --input inputs/inner_input.json");
             println!("  cargo run -- outer --input inputs/outer_input.json");
             println!("  cargo run -- outer-p256 --input inputs/outer_input.json");
+            println!("  cargo run -- outer-only --input inputs/outer_input.json");
         }
     }
     
@@ -388,6 +404,65 @@ fn generate_outer_p256_proof(
     
     println!("Outer P256 proof generation completed in: {:?}", start.elapsed());
     println!("Recursive P256 proof system complete!");
+    
+    Ok(())
+}
+
+fn generate_outer_only_proof(
+    outer: &zk_recursive::OuterOnlyCircuit,
+    input_file: &str,
+    build_dir: &Path,
+) -> Result<()> {
+    use std::time::Instant;
+    
+    println!("Loading outer-only input data from: {}", input_file);
+    let input_data = fs::read_to_string(input_file)?;
+    let input: OuterProofInput = serde_json::from_str(&input_data)?;
+    
+    let start = Instant::now();
+    
+    // Parse outer-only proof inputs
+    let sk0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk0));
+    let pk0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.x));
+    let pk0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.y));
+    
+    // Set up outer-only circuit witness
+    let mut pw = PartialWitness::<F>::new();
+    
+    pw.set_biguint_target(&outer.targets.pk0.x.value, &pk0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk0.y.value, &pk0_y.to_canonical_biguint())?;
+    set_nonnative_target(&mut pw, &outer.targets.sk0, sk0)?;
+    
+    // Generate outer-only proof
+    println!("Generating outer-only proof...");
+    let proof_start = Instant::now();
+    
+    println!("- Initializing prover for secp256k1 key derivation...");
+    let proof_time_start = Instant::now();
+    let proof = outer.data.prove(pw)?;
+    let proof_generation_time = proof_time_start.elapsed();
+    
+    let proof_time = proof_start.elapsed();
+    println!("- Key derivation proof generation time: {:?}", proof_generation_time);
+    println!("Outer-only proof total generation time: {:?}", proof_time);
+    println!("Outer-only proof size: {} bytes", proof.to_bytes().len());
+    
+    // Verify outer-only proof
+    println!("Verifying outer-only proof...");
+    let verify_start = Instant::now();
+    outer.data.verify(proof.clone())?;
+    println!("Outer-only proof verification time: {:?}", verify_start.elapsed());
+    
+    // Save outer-only proof
+    println!("Serializing and saving outer-only proof...");
+    let save_start = Instant::now();
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("outer_only_proof.bin"), &proof_data)?;
+    println!("Outer-only proof serialization + save time: {:?}", save_start.elapsed());
+    println!("Outer-only proof saved: {} bytes", proof_data.len());
+    
+    println!("Outer-only proof generation completed in: {:?}", start.elapsed());
+    println!("Secp256k1 key derivation proof system complete!");
     
     Ok(())
 }
