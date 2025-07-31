@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "zk-recursive"
 path = "src/main.rs"
 
+[[bin]]
+name = "generate_outer_sig_verify_data"
+path = "inputs/tools/generate_outer_sig_verify_data.rs"
+
 [dependencies]
 plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2" }
 plonky2_ecdsa = { git = "https://github.com/sommer-ph/plonky2-ecdsa", package = "plonky2_ecdsa" }

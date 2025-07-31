@@ -7,4 +7,4 @@ pub use circuits::{
     outer_p256::{build_outer_p256_circuit, OuterP256Circuit, OuterP256CircuitTargets},
     outer_only::{build_outer_only_circuit, OuterOnlyCircuit, OuterOnlyCircuitTargets},
 };
-pub use types::input::{InnerProofInput, OuterProofInput};
+pub use types::input::{InnerProofInput, OuterProofInput, InnerSigVerifyInput, OuterKeyDerInput, OuterSigVerifyInput};

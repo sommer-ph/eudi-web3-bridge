@@ -1,0 +1,11 @@
+{
+  "pk_i": {
+    "x": "0xa7ee0e9f04c7ba6d68b32bfb6b8ebb94a8aaef073b2e76bee2b1e3cd4c7e71b9",
+    "y": "0x5f5b7b0f0bfe3a7a3e1d3ca0c6e1e3d6e8f2a1b4c9d8e7f6a3b2c1d0e9f8a7b6"
+  },
+  "msg": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  "signature": {
+    "r": "0x4b5b0b4e7a2e1c3d6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0",
+    "s": "0x8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f"
+  }
+}
