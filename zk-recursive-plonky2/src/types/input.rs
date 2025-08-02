@@ -23,6 +23,13 @@ pub struct InnerProofInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OuterProofInput {
+    // Inner circuit fields
+    pub pk_i: Point,
+    pub msg: String,
+    pub signature: Signature,
+    pub pk_cred: Point,
+    pub sk_c: String,
+    // Outer circuit fields
     pub sk0: String,
     pub pk0: Point,
 }

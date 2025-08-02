@@ -36,6 +36,7 @@ pub struct OuterCircuit {
 pub fn build_outer_circuit(inner_common: &CommonCircuitData<F, D>) -> OuterCircuit {
     let config = CircuitConfig::standard_ecc_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
+    
     // Public input: secp256k1 blockchain wallet public key (pk0)
     let pk0 = builder.add_virtual_affine_point_target::<Secp256K1>();
     for limb in pk0.x.value.limbs.iter().chain(pk0.y.value.limbs.iter()) {
