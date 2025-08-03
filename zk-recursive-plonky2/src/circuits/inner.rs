@@ -1,3 +1,12 @@
+//! Inner circuit implementation for the recursive zk-SNARK system.
+//!
+//! This module implements the inner circuit which performs two main computations:
+//! - C1: Credential key derivation (pk_c = sk_c * G)
+//! - C2: Credential public key equality check (pk_c === pk_cred) 
+//! - C3: ECDSA signature verification
+//!
+//! The inner circuit produces a proof that can be recursively verified by the outer circuit.
+
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -89,23 +98,11 @@ pub fn build_inner_circuit() -> InnerCircuit {
 mod tests {
     use super::*;
     use anyhow::Result;
-    use plonky2::field::types::Sample;
-    use plonky2::field::types::{PrimeField, PrimeField64};
+    use plonky2::field::types::{Sample, PrimeField};
     use plonky2::iop::witness::PartialWitness;
     use plonky2_ecdsa::curve::ecdsa::{sign_message, ECDSASecretKey};
     use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
-
-    /// Helper to set a nonnative target.
-    fn set_nonnative_target<FF: PrimeField>(
-        pw: &mut PartialWitness<F>,
-        target: &plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<FF>,
-        value: FF,
-    ) -> Result<()>
-    where
-        F: PrimeField64,
-    {
-        pw.set_biguint_target(&target.value, &value.to_canonical_biguint())
-    }
+    use crate::utils::parsing::set_nonnative_target;
 
     #[test]
     #[ignore]

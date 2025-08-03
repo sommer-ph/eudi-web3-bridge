@@ -18,7 +18,7 @@ use num_traits::Num;
 #[derive(Parser)]
 struct Args {
     /// Output file path
-    #[arg(short, long, default_value = "inputs/experiments/outer_sig_verify.json")]
+    #[arg(short, long, default_value = "inputs/outer.json")]
     output: PathBuf,
 }
 
@@ -27,16 +27,22 @@ struct Point {
     x: String,
     y: String,
 }
+
 #[derive(Serialize)]
 struct Signature {
     r: String,
     s: String,
 }
+
 #[derive(Serialize)]
-struct OuterSigVerifyInput {
+struct OuterProofInput {
+    // Inner circuit fields
     pk_i: Point,
     msg: String,
     signature: Signature,
+    pk_cred: Point,
+    sk_c: String,
+    // Outer circuit fields
     sk0: String,
     pk0: Point,
 }
@@ -49,6 +55,7 @@ fn to_hex<F: PrimeField>(x: &F) -> String {
     }
     format!("0x{s}")
 }
+
 /// Same for BigUint (coordinate points)
 fn to_hex_biguint(b: &BigUint) -> String {
     let mut s = b.to_str_radix(16);
@@ -61,11 +68,11 @@ fn to_hex_biguint(b: &BigUint) -> String {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    // ---------- 1. Issuer-Key (P-256) ----------
+    // ---------- 1. Issuer-Key (P-256) für Signaturverifikation ----------
     let sk_i = ECDSASecretKey::<P256>(P256Scalar::rand());
     let pk_i = sk_i.to_public().0;
 
-    let msg = P256Scalar::rand();                  // random message
+    let msg = P256Scalar::rand();                  // zufällige Nachricht
     let mut sig = sign_message(msg, sk_i);         // (r,s)
 
     // ---------- Low-s normalization ----------
@@ -81,13 +88,19 @@ fn main() -> Result<()> {
         sig.s = P256Scalar::from_noncanonical_biguint(s_low);
     }
 
-    // ---------- 2. Wallet-Key (secp256k1) ----------
+    // ---------- 2. EUDI Credential Key (P-256) für Key Derivation ----------
+    let sk_c_scalar = P256Scalar::rand();
+    let sk_c = ECDSASecretKey::<P256>(sk_c_scalar);
+    let pk_cred = sk_c.to_public().0;
+
+    // ---------- 3. Blockchain Wallet Key (secp256k1) ----------
     let sk0_scalar = Secp256K1Scalar::rand();
     let sk0 = ECDSASecretKey::<Secp256K1>(sk0_scalar);
     let pk0 = sk0.to_public().0;
 
-    // ---------- 3. Output JSON ----------
-    let json = OuterSigVerifyInput {
+    // ---------- 4. Output JSON ----------
+    let json = OuterProofInput {
+        // Inner circuit fields
         pk_i: Point {
             x: to_hex(&pk_i.x),
             y: to_hex(&pk_i.y),
@@ -97,6 +110,12 @@ fn main() -> Result<()> {
             r: to_hex(&sig.r),
             s: to_hex(&sig.s),
         },
+        pk_cred: Point {
+            x: to_hex(&pk_cred.x),
+            y: to_hex(&pk_cred.y),
+        },
+        sk_c: to_hex(&sk_c_scalar),
+        // Outer circuit fields
         sk0: to_hex(&sk0_scalar),
         pk0: Point {
             x: to_hex_biguint(&pk0.x.to_canonical_biguint()),
@@ -105,6 +124,6 @@ fn main() -> Result<()> {
     };
 
     fs::write(&args.output, serde_json::to_string_pretty(&json)?)?;
-    println!("New test JSON written to {:?}", args.output);
+    println!("New outer proof input JSON written to {:?}", args.output);
     Ok(())
 }

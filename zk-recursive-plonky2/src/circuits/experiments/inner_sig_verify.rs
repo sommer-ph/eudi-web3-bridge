@@ -66,22 +66,11 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use plonky2::field::types::Sample;
-    use plonky2::field::types::{PrimeField, PrimeField64};
+    use crate::utils::parsing::set_nonnative_target;
+    use plonky2::field::types::{PrimeField};
     use plonky2::iop::witness::PartialWitness;
     use plonky2_ecdsa::curve::ecdsa::{sign_message, ECDSASecretKey};
     use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
-
-    /// Helper to set a nonnative target.
-    fn set_nonnative_target<FF: PrimeField>(
-        pw: &mut PartialWitness<F>,
-        target: &plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<FF>,
-        value: FF,
-    ) -> Result<()>
-    where
-        F: PrimeField64,
-    {
-        pw.set_biguint_target(&target.value, &value.to_canonical_biguint())
-    }
 
     #[test]
     #[ignore]

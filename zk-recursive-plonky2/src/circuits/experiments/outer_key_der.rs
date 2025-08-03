@@ -77,23 +77,12 @@ mod tests {
     use crate::circuits::experiments::inner_key_der::build_inner_key_der_circuit;
     use anyhow::Result;
     use plonky2::field::types::Sample;
-    use plonky2::field::types::{PrimeField, PrimeField64};
+    use crate::utils::parsing::set_nonnative_target;
+    use plonky2::field::types::{PrimeField};
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2_ecdsa::curve::ecdsa::ECDSASecretKey;
     use plonky2_ecdsa::field::p256_scalar::P256Scalar;
     use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
-
-    /// Helper to set a nonnative target.
-    fn set_nonnative_target<FF: PrimeField>(
-        pw: &mut PartialWitness<F>,
-        target: &plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<FF>,
-        value: FF,
-    ) -> Result<()>
-    where
-        F: PrimeField64,
-    {
-        pw.set_biguint_target(&target.value, &value.to_canonical_biguint())
-    }
 
     #[test]
     #[ignore]

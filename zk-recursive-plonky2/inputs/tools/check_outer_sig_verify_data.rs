@@ -26,10 +26,10 @@ fn hex_to_bytes(s: &str) -> Vec<u8> {
 
 fn main() -> Result<()> {
     let json: Input = serde_json::from_slice(
-        &fs::read(PathBuf::from("outer_sig_verify.json"))?
+        &fs::read(PathBuf::from("inputs/experiments/outer_sig_verify.json"))?
     )?;
 
-    // ---------- 1. P-256-Signatur prüfen ----------
+    // ---------- 1. Check P-256 signature ----------
     let x_bytes = hex_to_bytes(&json.pk_i.x);
     let y_bytes = hex_to_bytes(&json.pk_i.y);
     // SEC1 uncompressed format: 0x04 + x + y
@@ -43,10 +43,10 @@ fn main() -> Result<()> {
     let msg_bytes   = hex_to_bytes(&json.msg);
 
     vk.verify_prehash(&msg_bytes, &sig)
-        .map_err(|_| anyhow::anyhow!("P-256 Signatur ungültig"))?;
-    println!("P-256-Signatur passt zu pk_i und msg");
+        .map_err(|_| anyhow::anyhow!("P-256 signature invalid"))?;
+    println!("P-256 signature matches pk_i and msg");
 
-    // ---------- 2. secp256k1-Keypair prüfen ----------
+    // ---------- 2. Check secp256k1 keypair ----------
     let sk0_bytes   = hex_to_bytes(&json.sk0);
     let sk0         = K256Secret::from_slice(&sk0_bytes)?;
     let pk0_calc    = K256Public::from(sk0.verifying_key());
@@ -58,8 +58,8 @@ fn main() -> Result<()> {
     pk0_bytes.extend_from_slice(&y0_bytes);
     let pk0_given   = K256Public::from_sec1_bytes(&pk0_bytes)?;
 
-    assert_eq!(pk0_calc, pk0_given, "pk0 stimmt nicht zu sk0");
-    println!("secp256k1-Keypair (sk0 / pk0) ist konsistent");
+    assert_eq!(pk0_calc, pk0_given, "pk0 does not match sk0");
+    println!("secp256k1 keypair (sk0 / pk0) is consistent");
 
     Ok(())
 }

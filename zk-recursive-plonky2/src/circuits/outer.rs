@@ -1,3 +1,11 @@
+//! Outer circuit implementation for the recursive zk-SNARK system.
+//!
+//! This module implements the outer circuit which performs:
+//! - C4: Secp256k1 key derivation (pk0 = sk0 * G)
+//! - Recursive verification of the inner circuit proof
+//!
+//! The outer circuit provides the final proof for the complete recursive system.
+
 use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData};
@@ -76,25 +84,13 @@ mod tests {
     use super::*;
     use crate::circuits::inner::build_inner_circuit;
     use anyhow::Result;
-    use plonky2::field::types::Sample;
-    use plonky2::field::types::{PrimeField, PrimeField64};
+    use plonky2::field::types::{Sample, PrimeField};
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2_ecdsa::curve::ecdsa::{sign_message, ECDSASecretKey};
     use plonky2_ecdsa::curve::p256::P256;
     use plonky2_ecdsa::field::p256_scalar::P256Scalar;
     use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
-
-    /// Helper to set a nonnative target.
-    fn set_nonnative_target<FF: PrimeField>(
-        pw: &mut PartialWitness<F>,
-        target: &plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<FF>,
-        value: FF,
-    ) -> Result<()>
-    where
-        F: PrimeField64,
-    {
-        pw.set_biguint_target(&target.value, &value.to_canonical_biguint())
-    }
+    use crate::utils::parsing::set_nonnative_target;
 
     #[test]
     #[ignore]

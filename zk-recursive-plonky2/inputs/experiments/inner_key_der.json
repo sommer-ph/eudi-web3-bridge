@@ -1,7 +1,7 @@
 {
-  "sk_c": "0xa2f5a11260b589a05de49dac1ccfccbe693a8f8b42333e22d59563b6e0a29f54",
   "pk_cred": {
-    "x": "0xcf82c901d7c80fa8fc39e04b07453cd3c2fae46e204c5cce99a0ad10b6282f4d",
-    "y": "0xfad198b143b5621b49fe2e45db99fe727807597a446cd68f2769a7f8fabf2ec5"
-  }
+    "x": "0xf0cf20907632b16a6c63b668dce87a1a124c04a4e966a642b2898f68b9601a33",
+    "y": "0x6e408fbf2d816fbb1b9da20fcdb205aa47c8b9ef9e1a954cdfec1e6132442fc5"
+  },
+  "sk_c": "0xaa6a7c29662e85cb5f27882ad2b03f7dbab6502bdd3dd9d6a6941a3d393812f9"
 }

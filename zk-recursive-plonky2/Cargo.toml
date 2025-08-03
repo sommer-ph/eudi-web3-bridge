@@ -12,6 +12,22 @@ name = "zk-recursive"
 path = "src/main.rs"
 
 [[bin]]
+name = "generate_outer_data"
+path = "inputs/tools/generate_outer_data.rs"
+
+[[bin]]
+name = "check_outer_data"
+path = "inputs/tools/check_outer_data.rs"
+
+[[bin]]
+name = "generate_outer_key_der_data"
+path = "inputs/tools/generate_outer_key_der_data.rs"
+
+[[bin]]
+name = "check_outer_key_der_data"
+path = "inputs/tools/check_outer_key_der_data.rs"
+
+[[bin]]
 name = "generate_outer_sig_verify_data"
 path = "inputs/tools/generate_outer_sig_verify_data.rs"
 
