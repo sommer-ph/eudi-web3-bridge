@@ -12,14 +12,6 @@ pub struct Signature {
     pub s: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InnerProofInput {
-    pub pk_i: Point,
-    pub msg: String,
-    pub signature: Signature,
-    pub pk_cred: Point,
-    pub sk_c: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OuterProofInput {
@@ -35,18 +27,6 @@ pub struct OuterProofInput {
 }
 
 // Experimental circuit input structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InnerKeyDerInput {
-    pub pk_cred: Point,
-    pub sk_c: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InnerSigVerifyInput {
-    pub pk_i: Point,
-    pub msg: String,
-    pub signature: Signature,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OuterKeyDerInput {

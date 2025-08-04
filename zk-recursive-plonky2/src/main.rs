@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 use clap::Parser;
 use anyhow::Result;
+use env_logger::Env;
 
 // Import our modules
 use zk_recursive::utils::circuit_stats::print_circuit_stats;
@@ -54,6 +55,9 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    // Initialize logger for TimingTree output
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    
     let args = Args::parse();
     use std::time::Instant;
     
@@ -169,12 +173,12 @@ fn main() -> Result<()> {
             println!("  exp-outer-key-der     - Outer recursive key derivation");
             println!("  exp-outer-sig-verify  - Outer recursive signature verification");
             println!("Commands:");
-            println!("  cargo run --bin zk-recursive -- inner --input inputs/inner.json");
-            println!("  cargo run --bin zk-recursive -- outer --input inputs/outer.json");
-            println!("  cargo run --bin zk-recursive -- exp-inner-key-der --input inputs/experiments/inner_key_der.json");
-            println!("  cargo run --bin zk-recursive -- exp-outer-key-der --input inputs/experiments/outer_key_der.json");
-            println!("  cargo run --bin zk-recursive -- exp-inner-sig-verify --input inputs/experiments/inner_sig_verify.json");
-            println!("  cargo run --bin zk-recursive -- exp-outer-sig-verify --input inputs/experiments/outer_sig_verify.json");
+            println!("  cargo run --release --bin zk-recursive -- inner --input inputs/outer.json");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/outer.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-inner-key-der --input inputs/experiments/outer_key_der.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-outer-key-der --input inputs/experiments/outer_key_der.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-inner-sig-verify --input inputs/experiments/outer_sig_verify.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-outer-sig-verify --input inputs/experiments/outer_sig_verify.json");
         }
     }
     

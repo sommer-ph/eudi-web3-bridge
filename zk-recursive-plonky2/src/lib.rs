@@ -7,4 +7,4 @@ pub use circuits::{
     inner::{build_inner_circuit, InnerCircuit, InnerCircuitTargets},
     outer::{build_outer_circuit, OuterCircuit, OuterCircuitTargets},
 };
-pub use types::input::{InnerProofInput, OuterProofInput};
+pub use types::input::OuterProofInput;

@@ -7,6 +7,9 @@
 
 use std::{fs, path::Path, time::Instant};
 use anyhow::Result;
+use log::Level;
+use plonky2::util::timing::TimingTree;
+use plonky2::plonk::prover::prove;
 use plonky2::field::types::{PrimeField, Field};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2_ecdsa::field::p256_scalar::P256Scalar;
@@ -47,10 +50,10 @@ pub fn generate_exp_inner_key_der_proof(
     
     // Generate inner key derivation proof
     println!("Generating inner key derivation proof...");
-    let proof_start = Instant::now();
-    let proof = inner.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Inner key derivation proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("inner_key_der_proof", Level::Info);
+    let proof = prove(&inner.data.prover_only, &inner.data.common, pw, &mut timing)?;
+    println!("Inner key derivation proof timing breakdown:");
+    timing.print();
     println!("Inner key derivation proof size: {} bytes", proof.to_bytes().len());
     
     // Verify inner key derivation proof
@@ -101,10 +104,10 @@ pub fn generate_exp_inner_sig_verify_proof(
     
     // Generate inner signature verification proof
     println!("Generating inner signature verification proof...");
-    let proof_start = Instant::now();
-    let proof = inner.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Inner signature verification proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("inner_sig_verify_proof", Level::Info);
+    let proof = prove(&inner.data.prover_only, &inner.data.common, pw, &mut timing)?;
+    println!("Inner signature verification proof timing breakdown:");
+    timing.print();
     println!("Inner signature verification proof size: {} bytes", proof.to_bytes().len());
     
     // Verify inner signature verification proof
@@ -168,10 +171,10 @@ pub fn generate_exp_outer_key_der_proof(
     
     // Generate outer recursive proof
     println!("Generating outer recursive key derivation proof...");
-    let proof_start = Instant::now();
-    let proof = outer.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Outer recursive key derivation proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("outer_key_der_recursive_proof", Level::Info);
+    let proof = prove(&outer.data.prover_only, &outer.data.common, pw, &mut timing)?;
+    println!("Outer recursive key derivation proof timing breakdown:");
+    timing.print();
     println!("Outer recursive key derivation proof size: {} bytes", proof.to_bytes().len());
     
     // Verify outer recursive proof
@@ -235,10 +238,10 @@ pub fn generate_exp_outer_sig_verify_proof(
     
     // Generate outer recursive proof
     println!("Generating outer recursive signature verification proof...");
-    let proof_start = Instant::now();
-    let proof = outer.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Outer recursive signature verification proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("outer_sig_verify_recursive_proof", Level::Info);
+    let proof = prove(&outer.data.prover_only, &outer.data.common, pw, &mut timing)?;
+    println!("Outer recursive signature verification proof timing breakdown:");
+    timing.print();
     println!("Outer recursive signature verification proof size: {} bytes", proof.to_bytes().len());
     
     // Verify outer recursive proof

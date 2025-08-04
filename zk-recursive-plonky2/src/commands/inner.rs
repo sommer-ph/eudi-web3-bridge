@@ -1,6 +1,9 @@
 //! Inner circuit proof generation command.
 
 use anyhow::Result;
+use log::Level;
+use plonky2::util::timing::TimingTree;
+use plonky2::plonk::prover::prove;
 use std::{fs, path::Path, time::Instant};
 use plonky2::field::types::{PrimeField, Field};
 use plonky2::iop::witness::PartialWitness;
@@ -49,10 +52,10 @@ pub fn generate_inner_proof(
     
     // Generate inner proof
     println!("Generating inner proof...");
-    let proof_start = Instant::now();
-    let proof = inner.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Inner proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("inner_proof", Level::Info);
+    let proof = prove(&inner.data.prover_only, &inner.data.common, pw, &mut timing)?;
+    println!("Inner proof timing breakdown:");
+    timing.print();
     println!("Inner proof size: {} bytes", proof.to_bytes().len());
     
     // Verify inner proof

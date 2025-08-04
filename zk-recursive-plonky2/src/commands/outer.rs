@@ -1,6 +1,9 @@
 //! Outer circuit proof generation command.
 
 use anyhow::Result;
+use log::Level;
+use plonky2::util::timing::TimingTree;
+use plonky2::plonk::prover::prove;
 use std::{fs, path::Path, time::Instant};
 use plonky2::field::{secp256k1_scalar::Secp256K1Scalar, types::{Field, PrimeField}};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -56,10 +59,10 @@ pub fn generate_outer_proof(
     
     // Generate outer recursive proof
     println!("Generating outer recursive proof...");
-    let proof_start = Instant::now();
-    let proof = outer.data.prove(pw)?;
-    let proof_time = proof_start.elapsed();
-    println!("Outer recursive proof generation time: {:?}", proof_time);
+    let mut timing = TimingTree::new("outer_recursive_proof", Level::Info);
+    let proof = prove(&outer.data.prover_only, &outer.data.common, pw, &mut timing)?;
+    println!("Outer recursive proof timing breakdown:");
+    timing.print();
     println!("Outer recursive proof size: {} bytes", proof.to_bytes().len());
     
     // Verify outer recursive proof
