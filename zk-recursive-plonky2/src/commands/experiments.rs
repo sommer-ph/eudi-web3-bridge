@@ -2,8 +2,7 @@
 //! 
 //! This module contains experimental proof generation functions for testing
 //! and development of recursive ZK-SNARK circuits. These functions handle
-//! both inner and outer proof generation for key derivation and signature
-//! verification circuits.
+//! both inner and outer proof generation.
 
 use std::{fs, path::Path, time::Instant};
 use anyhow::Result;
@@ -19,7 +18,8 @@ use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use serde_json;
 
 use crate::utils::parsing::{hex_to_bigint, set_nonnative_target};
-use crate::types::input::{OuterKeyDerInput, OuterSigVerifyInput};
+use crate::types::input::{OuterKeyDerInput, OuterSigVerifyInput, Bip32KeyDerInput};
+use hex;
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
@@ -39,13 +39,13 @@ pub fn generate_exp_inner_key_der_proof(
     
     // Parse key derivation proof inputs
     let sk_c = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_c));
-    let pk_cred_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_cred.x));
-    let pk_cred_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_cred.y));
+    let pk_c_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.x));
+    let pk_c_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.y));
     
     // Set up inner key derivation circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&inner.targets.pk_c.x.value, &pk_cred_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&inner.targets.pk_c.y.value, &pk_cred_y.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_c.x.value, &pk_c_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_c.y.value, &pk_c_y.to_canonical_biguint())?;
     set_nonnative_target(&mut pw, &inner.targets.sk_c, sk_c)?;
     
     // Generate inner key derivation proof
@@ -88,16 +88,16 @@ pub fn generate_exp_inner_sig_verify_proof(
     let start = Instant::now();
     
     // Parse signature verification proof inputs
-    let pk_i_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.x));
-    let pk_i_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.y));
+    let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.x));
+    let pk_issuer_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.y));
     let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
     let sig_r = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.r));
     let sig_s = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.s));
     
     // Set up inner signature verification circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&inner.targets.pk_i.x.value, &pk_i_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&inner.targets.pk_i.y.value, &pk_i_y.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer_y.to_canonical_biguint())?;
     set_nonnative_target(&mut pw, &inner.targets.msg, msg)?;
     set_nonnative_target(&mut pw, &inner.targets.sig.r, sig_r)?;
     set_nonnative_target(&mut pw, &inner.targets.sig.s, sig_s)?;
@@ -157,15 +157,15 @@ pub fn generate_exp_outer_key_der_proof(
     let input: OuterKeyDerInput = serde_json::from_str(&input_data)?;
         
     // Parse outer proof inputs
-    let sk0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk0));
-    let pk0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.x));
-    let pk0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.y));
+    let sk_0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_0));
+    let pk_0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.x));
+    let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
     
     // Set up outer circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&outer.targets.pk0.x.value, &pk0_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&outer.targets.pk0.y.value, &pk0_y.to_canonical_biguint())?;
-    set_nonnative_target(&mut pw, &outer.targets.sk0, sk0)?;
+    pw.set_biguint_target(&outer.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
+    set_nonnative_target(&mut pw, &outer.targets.sk_0, sk_0)?;
     pw.set_proof_with_pis_target(&outer.targets.proof, &inner_proof)?;
     pw.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
     
@@ -224,15 +224,15 @@ pub fn generate_exp_outer_sig_verify_proof(
     let input: OuterSigVerifyInput = serde_json::from_str(&input_data)?;
         
     // Parse outer proof inputs
-    let sk0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk0));
-    let pk0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.x));
-    let pk0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.y));
+    let sk_0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_0));
+    let pk_0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.x));
+    let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
     
     // Set up outer circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&outer.targets.pk0.x.value, &pk0_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&outer.targets.pk0.y.value, &pk0_y.to_canonical_biguint())?;
-    set_nonnative_target(&mut pw, &outer.targets.sk0, sk0)?;
+    pw.set_biguint_target(&outer.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
+    set_nonnative_target(&mut pw, &outer.targets.sk_0, sk_0)?;
     pw.set_proof_with_pis_target(&outer.targets.proof, &inner_proof)?;
     pw.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
     
@@ -259,6 +259,92 @@ pub fn generate_exp_outer_sig_verify_proof(
     println!("Outer recursive signature verification proof saved: {} bytes", proof_data.len());
     
     println!("Experimental recursive signature verification proof generation completed in: {:?}", total_start.elapsed());
+    
+    Ok(())
+}
+
+/// Generate experimental BIP32 key derivation proof
+pub fn generate_exp_bip32_key_der_proof(
+    circuit: &crate::circuits::experiments::bip_32_key_der::Bip32KeyDerCircuit,
+    input_file: &str,
+    build_dir: &Path,
+) -> Result<()> {
+    println!("Loading BIP32 key derivation input data from: {}", input_file);
+    let input_data = fs::read_to_string(input_file)?;
+    let input: Bip32KeyDerInput = serde_json::from_str(&input_data)?;
+    
+    let start = Instant::now();
+    
+    // Parse BIP32 key derivation inputs
+    let pk_0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.x));
+    let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
+    let pk_i_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.x));
+    let pk_i_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.y));
+    
+    // Parse chain codes (hex strings to bytes)
+    let cc_0_hex = input.cc_0.trim_start_matches("0x");
+    let cc_0_bytes = hex::decode(cc_0_hex).expect("Invalid cc_0 hex");
+    let cc_i_hex = input.cc_i.trim_start_matches("0x");
+    let cc_i_bytes = hex::decode(cc_i_hex).expect("Invalid cc_i hex");
+    
+    // Set up BIP32 key derivation circuit witness
+    let mut pw = PartialWitness::<F>::new();
+    
+    // Set parent public key (private input)
+    pw.set_biguint_target(&circuit.targets.bip32_targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&circuit.targets.bip32_targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
+    
+    // Set parent chain code (public input)
+    let cc_0_bits: Vec<bool> = cc_0_bytes.iter()
+        .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
+        .collect();
+    for (i, &bit) in cc_0_bits.iter().enumerate() {
+        pw.set_bool_target(circuit.targets.bip32_targets.cc_0[i], bit)?;
+    }
+    
+    // Set derivation index bits (public input)
+    let derivation_index_bits: Vec<bool> = (0..32).rev()
+        .map(|i| (input.derivation_index >> i) & 1 == 1)
+        .collect();
+    for (i, &bit) in derivation_index_bits.iter().enumerate() {
+        pw.set_bool_target(circuit.targets.bip32_targets.derivation_index[i], bit)?;
+    }
+    
+    // Set expected child public key (public input)
+    pw.set_biguint_target(&circuit.targets.bip32_targets.pk_i.x.value, &pk_i_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&circuit.targets.bip32_targets.pk_i.y.value, &pk_i_y.to_canonical_biguint())?;
+    
+    // Set expected child chain code (public input)
+    let cc_i_bits: Vec<bool> = cc_i_bytes.iter()
+        .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
+        .collect();
+    for (i, &bit) in cc_i_bits.iter().enumerate() {
+        pw.set_bool_target(circuit.targets.bip32_targets.cc_i[i], bit)?;
+    }
+    
+    // Generate BIP32 key derivation proof
+    println!("Generating BIP32 key derivation proof...");
+    let mut timing = TimingTree::new("bip32_key_der_proof", Level::Info);
+    let proof = prove(&circuit.data.prover_only, &circuit.data.common, pw, &mut timing)?;
+    println!("BIP32 key derivation proof timing breakdown:");
+    timing.print();
+    println!("BIP32 key derivation proof size: {} bytes", proof.to_bytes().len());
+    
+    // Verify BIP32 key derivation proof
+    println!("Verifying BIP32 key derivation proof...");
+    let verify_start = Instant::now();
+    circuit.data.verify(proof.clone())?;
+    println!("BIP32 key derivation proof verification time: {:?}", verify_start.elapsed());
+    
+    // Save BIP32 key derivation proof
+    println!("Serializing and saving BIP32 key derivation proof...");
+    let save_start = Instant::now();
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("exp_bip32_key_der_proof.bin"), &proof_data)?;
+    println!("BIP32 key derivation proof serialization + save time: {:?}", save_start.elapsed());
+    println!("BIP32 key derivation proof saved: {} bytes", proof_data.len());
+    
+    println!("Experimental BIP32 key derivation proof generation completed in: {:?}", start.elapsed());
     
     Ok(())
 }

@@ -3,9 +3,8 @@ use clap::Parser;
 use anyhow::Result;
 use env_logger::Env;
 
-// Import our modules
 use zk_recursive::utils::circuit_stats::print_circuit_stats;
-use zk_recursive::commands::{inner, outer, experiments};
+use zk_recursive::commands::{inner, outer, inner_extended, outer_extended, experiments};
 
 /// Command-line arguments for the zk-recursive proof generator
 #[derive(Parser)]
@@ -32,6 +31,16 @@ enum Commands {
         #[arg(short, long, help = "Input JSON file with outer proof data")]
         input: String,
     },
+    /// Build inner extended circuit for C1 - C4, generate proof and verify
+    InnerExtended {
+        #[arg(short, long, help = "Input JSON file with inner extended proof data")]
+        input: String,
+    },
+    /// Build inner extended circuit and outer extended circuit for C5 and inner extended proof verification, generate inner extended and outer extended proofs and verify
+    OuterExtended {
+        #[arg(short, long, help = "Input JSON file with outer extended proof data")]
+        input: String,
+    },
     /// Experimental: Build circuit for C1 and C2, generate proof and verify
     ExpInnerKeyDer {
         #[arg(short, long, help = "Input JSON file with inner proof data")]
@@ -52,10 +61,14 @@ enum Commands {
         #[arg(short, long, help = "Input JSON file with outer proof data")]
         input: String,
     },
+    /// Experimental: Build BIP32 key derivation circuit, generate proof and verify
+    ExpBip32KeyDer {
+        #[arg(short, long, help = "Input JSON file with BIP32 key derivation data")]
+        input: String,
+    },
 }
 
 fn main() -> Result<()> {
-    // Initialize logger for TimingTree output
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     
     let args = Args::parse();
@@ -64,13 +77,11 @@ fn main() -> Result<()> {
     println!("=== ZK-RECURSIVE PLONKY2 PROOF SYSTEM ===");
     let total_start = Instant::now();
     
-    // Create output directory for artifacts
     let build_dir = Path::new(&args.output_dir);
     if !build_dir.exists() {
         fs::create_dir_all(build_dir).expect("Failed to create output directory");
     }
     
-    // Execute based on command
     match args.command {
         Some(Commands::Inner { input }) => {
             use zk_recursive::build_inner_circuit;
@@ -101,6 +112,36 @@ fn main() -> Result<()> {
 
             println!("\n=== GENERATING OUTER PROOF ===");
             outer::generate_outer_proof(&inner, &outer, &input, &build_dir)?;
+        },
+        Some(Commands::InnerExtended { input }) => {
+            use zk_recursive::circuits::inner_extended::build_inner_extended_circuit;
+            println!("\nBuilding inner extended circuit...");
+            let inner_extended_start = Instant::now();
+            let inner_extended = build_inner_extended_circuit();
+            let inner_extended_total = inner_extended_start.elapsed();
+            println!("Inner extended circuit build time: {:?}", inner_extended_total);
+            print_circuit_stats("Inner Extended", &inner_extended.data.common);
+            
+            println!("\n=== GENERATING INNER EXTENDED PROOF ===");
+            inner_extended::generate_inner_extended_proof(&inner_extended, &input, &build_dir)?;
+        },
+        Some(Commands::OuterExtended { input }) => {
+            use zk_recursive::circuits::{inner_extended::build_inner_extended_circuit, outer_extended::build_outer_extended_circuit};
+            println!("\nBuilding outer extended circuits...");
+            let inner_extended_start = Instant::now();
+            let inner_extended = build_inner_extended_circuit();
+            let inner_extended_total = inner_extended_start.elapsed();
+            println!("Inner extended circuit build time: {:?}", inner_extended_total);
+            print_circuit_stats("Inner Extended", &inner_extended.data.common);
+            
+            let outer_extended_start = Instant::now();
+            let outer_extended = build_outer_extended_circuit(&inner_extended.data.common);
+            let outer_extended_total = outer_extended_start.elapsed();
+            println!("Outer extended circuit build time: {:?}", outer_extended_total);
+            print_circuit_stats("Outer Extended", &outer_extended.data.common);
+
+            println!("\n=== GENERATING OUTER EXTENDED RECURSIVE PROOF ===");
+            outer_extended::generate_outer_extended_proof(&inner_extended, &outer_extended, &input, &build_dir)?;
         },
         Some(Commands::ExpInnerKeyDer { input }) => {
             use zk_recursive::circuits::experiments::build_inner_key_der_circuit;
@@ -162,23 +203,29 @@ fn main() -> Result<()> {
             println!("\n=== GENERATING EXPERIMENTAL RECURSIVE SIGNATURE VERIFICATION PROOF ===");
             experiments::generate_exp_outer_sig_verify_proof(&inner, &outer, &input, &build_dir)?;
         },
+        Some(Commands::ExpBip32KeyDer { input }) => {
+            use zk_recursive::circuits::experiments::build_bip32_key_der_circuit;
+            println!("\nBuilding experimental BIP32 key derivation circuit...");
+            let circuit_start = Instant::now();
+            let circuit = build_bip32_key_der_circuit();
+            let circuit_total = circuit_start.elapsed();
+            println!("Experimental BIP32 key derivation circuit build time: {:?}", circuit_total);
+            print_circuit_stats("Experimental BIP32 Key Derivation", &circuit.data.common);
+            
+            println!("\n=== GENERATING EXPERIMENTAL BIP32 KEY DERIVATION PROOF ===");
+            experiments::generate_exp_bip32_key_der_proof(&circuit, &input, &build_dir)?;
+        },
         None => {
-            println!("\nNo command specified. Available subcommands:");
-            println!("Main circuits:");
-            println!("  inner  - Inner circuit (C1 + C3: key derivation + signature verification)");
-            println!("  outer  - Outer circuit (C2 + recursive verification of inner proof)");
-            println!("Experimental circuits:");
-            println!("  exp-inner-key-der     - Inner key derivation only (C1 and C2)");
-            println!("  exp-inner-sig-verify  - Inner signature verification only (C3)");
-            println!("  exp-outer-key-der     - Outer recursive key derivation");
-            println!("  exp-outer-sig-verify  - Outer recursive signature verification");
-            println!("Commands:");
+            println!("\nNo command specified. Available commands:");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/outer.json");
             println!("  cargo run --release --bin zk-recursive -- outer --input inputs/outer.json");
+            println!("  cargo run --release --bin zk-recursive -- inner-extended --input inputs/outer_extended.json");
+            println!("  cargo run --release --bin zk-recursive -- outer-extended --input inputs/outer_extended.json");
             println!("  cargo run --release --bin zk-recursive -- exp-inner-key-der --input inputs/experiments/outer_key_der.json");
             println!("  cargo run --release --bin zk-recursive -- exp-outer-key-der --input inputs/experiments/outer_key_der.json");
             println!("  cargo run --release --bin zk-recursive -- exp-inner-sig-verify --input inputs/experiments/outer_sig_verify.json");
             println!("  cargo run --release --bin zk-recursive -- exp-outer-sig-verify --input inputs/experiments/outer_sig_verify.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-bip32-key-der --input inputs/experiments/bip32_key_der.json");
         }
     }
     

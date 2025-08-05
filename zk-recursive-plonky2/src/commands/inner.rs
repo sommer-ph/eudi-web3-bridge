@@ -30,24 +30,24 @@ pub fn generate_inner_proof(
     let start = Instant::now();
     
     // Parse inner proof inputs
-    let pk_i_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.x));
-    let pk_i_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.y));
+    let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.x));
+    let pk_issuer_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.y));
     let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
     let sig_r = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.r));
     let sig_s = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.s));
-    let pk_cred_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_cred.x));
-    let pk_cred_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_cred.y));
+    let pk_c_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.x));
+    let pk_c_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.y));
     let sk_c = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_c));
     
     // Set up inner circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&inner.targets.pk_i.x.value, &pk_i_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&inner.targets.pk_i.y.value, &pk_i_y.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer_y.to_canonical_biguint())?;
     set_nonnative_target(&mut pw, &inner.targets.msg, msg)?;
     set_nonnative_target(&mut pw, &inner.targets.sig.r, sig_r)?;
     set_nonnative_target(&mut pw, &inner.targets.sig.s, sig_s)?;
-    pw.set_biguint_target(&inner.targets.pk_cred.x.value, &pk_cred_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&inner.targets.pk_cred.y.value, &pk_cred_y.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_c.x.value, &pk_c_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_c.y.value, &pk_c_y.to_canonical_biguint())?;
     set_nonnative_target(&mut pw, &inner.targets.sk_c, sk_c)?;
     
     // Generate inner proof

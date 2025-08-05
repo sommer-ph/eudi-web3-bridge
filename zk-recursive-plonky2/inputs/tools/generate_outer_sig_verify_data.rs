@@ -34,11 +34,11 @@ struct Signature {
 }
 #[derive(Serialize)]
 struct OuterSigVerifyInput {
-    pk_i: Point,
+    pk_issuer: Point,
     msg: String,
     signature: Signature,
-    sk0: String,
-    pk0: Point,
+    sk_0: String,
+    pk_0: Point,
 }
 
 /// 64-character hex representation (big-endian) of a field element
@@ -62,11 +62,11 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     // ---------- 1. Issuer-Key (P-256) ----------
-    let sk_i = ECDSASecretKey::<P256>(P256Scalar::rand());
-    let pk_i = sk_i.to_public().0;
+    let sk_issuer = ECDSASecretKey::<P256>(P256Scalar::rand());
+    let pk_issuer = sk_issuer.to_public().0;
 
     let msg = P256Scalar::rand();                  // random message
-    let mut sig = sign_message(msg, sk_i);         // (r,s)
+    let mut sig = sign_message(msg, sk_issuer);         // (r,s)
 
     // ---------- Low-s normalization ----------
     // Group order n of P-256 as BigUint
@@ -82,25 +82,25 @@ fn main() -> Result<()> {
     }
 
     // ---------- 2. Wallet-Key (secp256k1) ----------
-    let sk0_scalar = Secp256K1Scalar::rand();
-    let sk0 = ECDSASecretKey::<Secp256K1>(sk0_scalar);
-    let pk0 = sk0.to_public().0;
+    let sk_0_scalar = Secp256K1Scalar::rand();
+    let sk_0 = ECDSASecretKey::<Secp256K1>(sk_0_scalar);
+    let pk_0 = sk_0.to_public().0;
 
     // ---------- 3. Output JSON ----------
     let json = OuterSigVerifyInput {
-        pk_i: Point {
-            x: to_hex(&pk_i.x),
-            y: to_hex(&pk_i.y),
+        pk_issuer: Point {
+            x: to_hex(&pk_issuer.x),
+            y: to_hex(&pk_issuer.y),
         },
         msg: to_hex(&msg),
         signature: Signature {
             r: to_hex(&sig.r),
             s: to_hex(&sig.s),
         },
-        sk0: to_hex(&sk0_scalar),
-        pk0: Point {
-            x: to_hex_biguint(&pk0.x.to_canonical_biguint()),
-            y: to_hex_biguint(&pk0.y.to_canonical_biguint()),
+        sk_0: to_hex(&sk_0_scalar),
+        pk_0: Point {
+            x: to_hex_biguint(&pk_0.x.to_canonical_biguint()),
+            y: to_hex_biguint(&pk_0.y.to_canonical_biguint()),
         },
     };
 

@@ -45,15 +45,15 @@ pub fn generate_outer_proof(
     let input: OuterProofInput = serde_json::from_str(&input_data)?;
         
     // Parse outer proof inputs
-    let sk0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk0));
-    let pk0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.x));
-    let pk0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk0.y));
+    let sk_0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_0));
+    let pk_0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.x));
+    let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
     
     // Set up outer circuit witness
     let mut pw = PartialWitness::<F>::new();
-    pw.set_biguint_target(&outer.targets.pk0.x.value, &pk0_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&outer.targets.pk0.y.value, &pk0_y.to_canonical_biguint())?;
-    set_nonnative_target(&mut pw, &outer.targets.sk0, sk0)?;
+    pw.set_biguint_target(&outer.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
+    set_nonnative_target(&mut pw, &outer.targets.sk_0, sk_0)?;
     pw.set_proof_with_pis_target(&outer.targets.proof, &inner_proof)?;
     pw.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
     

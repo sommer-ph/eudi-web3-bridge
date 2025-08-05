@@ -16,8 +16,8 @@ type F = <Cfg as GenericConfig<D>>::F;
 /// Targets for the outer signature verification circuit.
 #[allow(dead_code)]
 pub struct OuterSigVerifyTargets {
-    pub pk0: plonky2_ecdsa::gadgets::curve::AffinePointTarget<Secp256K1>,
-    pub sk0: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<Secp256K1Scalar>,
+    pub pk_0: plonky2_ecdsa::gadgets::curve::AffinePointTarget<Secp256K1>,
+    pub sk_0: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<Secp256K1Scalar>,
     pub proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
 }
@@ -31,29 +31,29 @@ pub struct OuterSigVerifyCircuit {
 
 /// Build outer circuit that proves secp256k1 key derivation and recursively verifies inner signature verification proof.
 /// This circuit performs:
-/// 1. pk0 = KeyDer(sk0) over secp256k1 (blockchain wallet key derivation)
+/// 1. pk_0 = KeyDer(sk_0) over secp256k1 (blockchain wallet key derivation)
 /// 2. Recursively verifies the inner signature verification proof (P256 ECDSA signature verification)
 pub fn build_outer_sig_verify_circuit(inner_common: &CommonCircuitData<F, D>) -> OuterSigVerifyCircuit {
     let config = CircuitConfig::standard_ecc_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
-    // Public input: secp256k1 blockchain wallet public key (pk0)
-    let pk0 = builder.add_virtual_affine_point_target::<Secp256K1>();
-    for limb in pk0.x.value.limbs.iter().chain(pk0.y.value.limbs.iter()) {
+    // Public input: secp256k1 blockchain wallet public key (pk_0)
+    let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
+    for limb in pk_0.x.value.limbs.iter().chain(pk_0.y.value.limbs.iter()) {
         builder.register_public_input(limb.0);
     }
 
-    // Private input: secp256k1 blockchain wallet secret key (sk0)
-    let sk0 = builder.add_virtual_nonnative_target::<Secp256K1Scalar>();
+    // Private input: secp256k1 blockchain wallet secret key (sk_0)
+    let sk_0 = builder.add_virtual_nonnative_target::<Secp256K1Scalar>();
 
-    // === Blockchain Wallet Key Derivation (pk0 = KeyDer(sk0)) ===
+    // === Blockchain Wallet Key Derivation (pk_0 = KeyDer(sk_0)) ===
     // Derive public key from secret key using secp256k1 base point multiplication
-    let pk0_calc = fixed_base_curve_mul_circuit::<Secp256K1, F, D>(
+    let pk_0_calc = fixed_base_curve_mul_circuit::<Secp256K1, F, D>(
         &mut builder,
         Secp256K1::GENERATOR_AFFINE,
-        &sk0,
+        &sk_0,
     );
-    builder.connect_affine_point(&pk0_calc, &pk0);
+    builder.connect_affine_point(&pk_0_calc, &pk_0);
 
     // === Recursive Proof Verification ===
     // Add targets for the proof of the inner signature verification circuit and verify it recursively
@@ -63,8 +63,8 @@ pub fn build_outer_sig_verify_circuit(inner_common: &CommonCircuitData<F, D>) ->
 
     let data = builder.build::<Cfg>();
     let targets = OuterSigVerifyTargets {
-        pk0,
-        sk0,
+        pk_0,
+        sk_0,
         proof,
         vd,
     };
@@ -103,17 +103,17 @@ mod tests {
         println!("\nGenerating inner circuit test data...");
         let data_start = Instant::now();
         let msg = P256Scalar::rand();
-        let sk_i_val = P256Scalar::rand();
-        let sk_i = ECDSASecretKey::<plonky2_ecdsa::curve::p256::P256>(sk_i_val);
-        let pk_i = sk_i.to_public().0;
-        let sig = sign_message(msg, sk_i);
+        let sk_issuer_val = P256Scalar::rand();
+        let sk_issuer = ECDSASecretKey::<plonky2_ecdsa::curve::p256::P256>(sk_issuer_val);
+        let pk_issuer = sk_issuer.to_public().0;
+        let sig = sign_message(msg, sk_issuer);
         println!("Inner test data generation time: {:?}", data_start.elapsed());
 
         println!("\nSetting up inner circuit witness...");
         let witness_start = Instant::now();
         let mut pw1 = PartialWitness::<F>::new();
-        pw1.set_biguint_target(&inner.targets.pk_i.x.value, &pk_i.x.to_canonical_biguint())?;
-        pw1.set_biguint_target(&inner.targets.pk_i.y.value, &pk_i.y.to_canonical_biguint())?;
+        pw1.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer.x.to_canonical_biguint())?;
+        pw1.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer.y.to_canonical_biguint())?;
         set_nonnative_target(&mut pw1, &inner.targets.msg, msg)?;
         set_nonnative_target(&mut pw1, &inner.targets.sig.r, sig.r)?;
         set_nonnative_target(&mut pw1, &inner.targets.sig.s, sig.s)?;
@@ -144,17 +144,17 @@ mod tests {
 
         println!("\nGenerating outer circuit test data...");
         let data2_start = Instant::now();
-        let sk0_val = Secp256K1Scalar::rand();
-        let sk0 = ECDSASecretKey::<Secp256K1>(sk0_val);
-        let pk0 = sk0.to_public().0;
+        let sk_0_val = Secp256K1Scalar::rand();
+        let sk_0 = ECDSASecretKey::<Secp256K1>(sk_0_val);
+        let pk_0 = sk_0.to_public().0;
         println!("Outer test data generation time: {:?}", data2_start.elapsed());
 
         println!("\nSetting up outer circuit witness...");
         let witness2_start = Instant::now();
         let mut pw2 = PartialWitness::<F>::new();
-        pw2.set_biguint_target(&outer.targets.pk0.x.value, &pk0.x.to_canonical_biguint())?;
-        pw2.set_biguint_target(&outer.targets.pk0.y.value, &pk0.y.to_canonical_biguint())?;
-        set_nonnative_target(&mut pw2, &outer.targets.sk0, sk0_val)?;
+        pw2.set_biguint_target(&outer.targets.pk_0.x.value, &pk_0.x.to_canonical_biguint())?;
+        pw2.set_biguint_target(&outer.targets.pk_0.y.value, &pk_0.y.to_canonical_biguint())?;
+        set_nonnative_target(&mut pw2, &outer.targets.sk_0, sk_0_val)?;
         pw2.set_proof_with_pis_target(&outer.targets.proof, &proof1)?;
         pw2.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
         println!("Outer witness setup time: {:?}", witness2_start.elapsed());

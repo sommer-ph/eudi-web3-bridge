@@ -1,0 +1,13 @@
+{
+  "pk_0": {
+    "x": "0xbaae0e0e2326c6d70975394f6cd69c431a6fc2ffc9af089c1539197d7896ce93",
+    "y": "0x2420f71a32fddd94c4109ae91e6125e8aaa1c2e5e6af38d9fd651190688915d1"
+  },
+  "cc_0": "0x9d4b4cf04342c2dc71458a6fc11eda0adb20e073e0d9b442e870a6ce9140198c",
+  "derivation_index": 0,
+  "pk_i": {
+    "x": "0x88b85d51a1bc3b681008360c430cf49bd5ba43b90c7fe545cebad6ccb1007184",
+    "y": "0x4cefe647eb2766b6e8b1eff0067fce971ccba408ef4432db9a7a2f8841475675"
+  },
+  "cc_i": "0x6804d7a41f1f1cab5e00c1069d54677fdd7cc018e19fe696af3f2de42b35f86e"
+}

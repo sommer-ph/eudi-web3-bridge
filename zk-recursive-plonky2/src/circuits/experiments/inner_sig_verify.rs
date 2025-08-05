@@ -17,7 +17,7 @@ type F = <Cfg as GenericConfig<D>>::F;
 /// Targets for the signature verification only inner circuit.
 #[allow(dead_code)]
 pub struct InnerSigVerifyTargets {
-    pub pk_i: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
+    pub pk_issuer: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
     pub msg: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<P256Scalar>,
     pub sig: ECDSASignatureTarget<P256>,
 }
@@ -36,8 +36,8 @@ pub fn build_inner_sig_verify_circuit() -> InnerSigVerifyCircuit {
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // Public input: issuer public key (pk_I)
-    let pk_i = builder.add_virtual_affine_point_target::<P256>();
-    for limb in pk_i.x.value.limbs.iter().chain(pk_i.y.value.limbs.iter()) {
+    let pk_issuer = builder.add_virtual_affine_point_target::<P256>();
+    for limb in pk_issuer.x.value.limbs.iter().chain(pk_issuer.y.value.limbs.iter()) {
         builder.register_public_input(limb.0);
     }
 
@@ -49,12 +49,12 @@ pub fn build_inner_sig_verify_circuit() -> InnerSigVerifyCircuit {
 
     // === C3: Credential Signature Verification (SigVerify(pk_I, msg, sig)) ===
     // Verify that the credential was validly signed by a trusted issuer
-    let pk_target = ECDSAPublicKeyTarget(pk_i.clone());
+    let pk_target = ECDSAPublicKeyTarget(pk_issuer.clone());
     verify_p256_message_circuit(&mut builder, msg.clone(), signature.clone(), pk_target);
 
     let data = builder.build::<Cfg>();
     let targets = InnerSigVerifyTargets {
-        pk_i,
+        pk_issuer,
         msg,
         sig: signature,
     };
@@ -87,17 +87,17 @@ mod tests {
         println!("\nGenerating test data...");
         let data_start = Instant::now();
         let msg = P256Scalar::rand();
-        let sk_i_val = P256Scalar::rand();
-        let sk_i = ECDSASecretKey::<P256>(sk_i_val);
-        let pk_i = sk_i.to_public().0;
-        let sig = sign_message(msg, sk_i);
+        let sk_issuer_val = P256Scalar::rand();
+        let sk_issuer = ECDSASecretKey::<P256>(sk_issuer_val);
+        let pk_issuer = sk_issuer.to_public().0;
+        let sig = sign_message(msg, sk_issuer);
         println!("Test data generation time: {:?}", data_start.elapsed());
 
         println!("\nSetting up witness...");
         let witness_start = Instant::now();
         let mut pw = PartialWitness::<F>::new();
-        pw.set_biguint_target(&inner.targets.pk_i.x.value, &pk_i.x.to_canonical_biguint())?;
-        pw.set_biguint_target(&inner.targets.pk_i.y.value, &pk_i.y.to_canonical_biguint())?;
+        pw.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer.x.to_canonical_biguint())?;
+        pw.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer.y.to_canonical_biguint())?;
         set_nonnative_target(&mut pw, &inner.targets.msg, msg)?;
         set_nonnative_target(&mut pw, &inner.targets.sig.r, sig.r)?;
         set_nonnative_target(&mut pw, &inner.targets.sig.s, sig.s)?;

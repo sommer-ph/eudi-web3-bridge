@@ -29,10 +29,10 @@ struct Point {
 
 #[derive(Serialize)]
 struct OuterKeyDerInput {
-    pk_cred: Point,
+    pk_c: Point,
     sk_c: String,
-    sk0: String,
-    pk0: Point,
+    sk_0: String,
+    pk_0: Point,
 }
 
 /// 64-character hex representation (big-endian) of a field element
@@ -59,24 +59,24 @@ fn main() -> Result<()> {
     // ---------- 1. EUDI Credential Key (P-256) ----------
     let sk_c_scalar = P256Scalar::rand();
     let sk_c = ECDSASecretKey::<P256>(sk_c_scalar);
-    let pk_cred = sk_c.to_public().0;
+    let pk_c = sk_c.to_public().0;
 
     // ---------- 2. Blockchain Wallet Key (secp256k1) ----------
-    let sk0_scalar = Secp256K1Scalar::rand();
-    let sk0 = ECDSASecretKey::<Secp256K1>(sk0_scalar);
-    let pk0 = sk0.to_public().0;
+    let sk_0_scalar = Secp256K1Scalar::rand();
+    let sk_0 = ECDSASecretKey::<Secp256K1>(sk_0_scalar);
+    let pk_0 = sk_0.to_public().0;
 
     // ---------- 3. Output JSON ----------
     let json = OuterKeyDerInput {
-        pk_cred: Point {
-            x: to_hex(&pk_cred.x),
-            y: to_hex(&pk_cred.y),
+        pk_c: Point {
+            x: to_hex(&pk_c.x),
+            y: to_hex(&pk_c.y),
         },
         sk_c: to_hex(&sk_c_scalar),
-        sk0: to_hex(&sk0_scalar),
-        pk0: Point {
-            x: to_hex_biguint(&pk0.x.to_canonical_biguint()),
-            y: to_hex_biguint(&pk0.y.to_canonical_biguint()),
+        sk_0: to_hex(&sk_0_scalar),
+        pk_0: Point {
+            x: to_hex_biguint(&pk_0.x.to_canonical_biguint()),
+            y: to_hex_biguint(&pk_0.y.to_canonical_biguint()),
         },
     };
 
