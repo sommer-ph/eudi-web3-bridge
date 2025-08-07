@@ -5,6 +5,7 @@ use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use crate::utils::key_derivation::{
     add_bip32_key_derivation_constraints, Bip32KeyDerivationTargets
 };
+use crate::utils::bit_packing::{pack_256_bits_to_field_elements, pack_32_bits_to_field_element};
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
@@ -51,16 +52,18 @@ pub fn build_outer_extended_circuit(
     // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)
     let bip32_targets = add_bip32_key_derivation_constraints(&mut builder);
     
-    // === Public Inputs Registration ===
-    // Register cc_0 as public input
-    for chain_code_bit in &bip32_targets.cc_0 {
-        builder.register_public_input(chain_code_bit.target);
+    // === Public Inputs Registration (Optimized with Bit Packing) ===
+    println!("Optimizing public inputs: Packing bits into field elements...");
+    
+    // Pack cc_0 (256 bits) into 4 field elements
+    let cc_0_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_0, &mut builder);
+    for &target in &cc_0_packed {
+        builder.register_public_input(target);
     }
     
-    // Register child index as public input 
-    for index_bit in &bip32_targets.derivation_index {
-        builder.register_public_input(index_bit.target);
-    }
+    // Pack derivation_index (32 bits) into 1 field element  
+    let index_packed = pack_32_bits_to_field_element(&bip32_targets.derivation_index, &mut builder);
+    builder.register_public_input(index_packed);
     
     // Register pk_i as public input
     for limb in bip32_targets.pk_i.x.value.limbs.iter().chain(
@@ -69,10 +72,13 @@ pub fn build_outer_extended_circuit(
         builder.register_public_input(limb.0);
     }
     
-    // Register cc_i as public input (derived from HMAC)
-    for chain_code_bit in &bip32_targets.cc_i {
-        builder.register_public_input(chain_code_bit.target);
+    // Pack cc_i (256 bits) into 4 field elements
+    let cc_i_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_i, &mut builder);
+    for &target in &cc_i_packed {
+        builder.register_public_input(target);
     }
+    
+    println!("Public input optimization: 560 bits -> ~17 field elements (256+32+256 bits packed + pk_i limbs)");
     
     let data = builder.build::<Cfg>();
     let targets = OuterExtendedCircuitTargets {
