@@ -78,3 +78,11 @@ pub struct Bip32KeyDerInput {
     pub pk_i: Point,
     pub cc_i: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InnerSigVerifyStaticInput {
+    // Inner signature verification fields with static public key
+    // No pk_issuer field needed since it's fixed in the circuit
+    pub msg: String,
+    pub signature: Signature,
+}

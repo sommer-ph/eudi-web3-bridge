@@ -56,6 +56,11 @@ enum Commands {
         #[arg(short, long, help = "Input JSON file with inner proof data")]
         input: String,
     },
+    /// Experimental: Build circuit for C3 with static public key, generate proof and verify
+    ExpInnerSigVerifyStatic {
+        #[arg(short, long, help = "Input JSON file with inner signature verification (static PK) data")]
+        input: String,
+    },
     /// Experimental: Build experimental inner signature verification circuit and outer circuit for C4 and inner proof verification, generate inner and outer proofs and verify
     ExpOuterSigVerify {
         #[arg(short, long, help = "Input JSON file with outer proof data")]
@@ -185,6 +190,18 @@ fn main() -> Result<()> {
             println!("\n=== GENERATING EXPERIMENTAL INNER SIGNATURE VERIFICATION PROOF ===");
             experiments::generate_exp_inner_sig_verify_proof(&inner, &input, &build_dir)?;
         },
+        Some(Commands::ExpInnerSigVerifyStatic { input }) => {
+            use zk_recursive::circuits::experiments::build_inner_sig_verify_static_circuit;
+            println!("\nBuilding experimental inner signature verification circuit (static PK)...");
+            let inner_start = Instant::now();
+            let inner = build_inner_sig_verify_static_circuit();
+            let inner_total = inner_start.elapsed();
+            println!("Experimental inner signature verification circuit (static PK) build time: {:?}", inner_total);
+            print_circuit_stats("Experimental Inner Signature Verification (Static PK)", &inner.data.common);
+            
+            println!("\n=== GENERATING EXPERIMENTAL INNER SIGNATURE VERIFICATION PROOF (STATIC PK) ===");
+            experiments::generate_exp_inner_sig_verify_static_proof(&inner, &input, &build_dir)?;
+        },
         Some(Commands::ExpOuterSigVerify { input }) => {
             use zk_recursive::circuits::experiments::{build_inner_sig_verify_circuit, build_outer_sig_verify_circuit};
             println!("\nBuilding experimental recursive signature verification circuits...");
@@ -224,6 +241,7 @@ fn main() -> Result<()> {
             println!("  cargo run --release --bin zk-recursive -- exp-inner-key-der --input inputs/experiments/outer_key_der.json");
             println!("  cargo run --release --bin zk-recursive -- exp-outer-key-der --input inputs/experiments/outer_key_der.json");
             println!("  cargo run --release --bin zk-recursive -- exp-inner-sig-verify --input inputs/experiments/outer_sig_verify.json");
+            println!("  cargo run --release --bin zk-recursive -- exp-inner-sig-verify-static --input inputs/experiments/inner_sig_verify_static.json");
             println!("  cargo run --release --bin zk-recursive -- exp-outer-sig-verify --input inputs/experiments/outer_sig_verify.json");
             println!("  cargo run --release --bin zk-recursive -- exp-bip32-key-der --input inputs/experiments/bip32_key_der.json");
         }

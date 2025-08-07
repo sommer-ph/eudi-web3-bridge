@@ -44,6 +44,14 @@ name = "check_outer_sig_verify_data"
 path = "inputs/tools/check_outer_sig_verify_data.rs"
 
 [[bin]]
+name = "generate_inner_sig_verify_static_data"
+path = "inputs/tools/generate_inner_sig_verify_static_data.rs"
+
+[[bin]]
+name = "check_inner_sig_verify_static_data"
+path = "inputs/tools/check_inner_sig_verify_static_data.rs"
+
+[[bin]]
 name = "generate_bip32_key_der_data"
 path = "inputs/tools/generate_bip32_key_der_data.rs"
 
@@ -53,7 +61,7 @@ path = "inputs/tools/check_bip32_key_der_data.rs"
 
 [dependencies]
 plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2", features = ["timing"] }
-plonky2_ecdsa = { git = "https://github.com/sommer-ph/plonky2-ecdsa", package = "plonky2_ecdsa" }
+plonky2_ecdsa = { git = "https://github.com/sommer-ph/plonky2-ecdsa", package = "plonky2_ecdsa", features = ["static-issuer"] }
 plonky2_sha512 = { git = "https://github.com/sommer-ph/plonky2_sha512" }
 # Note: bincode 1.3 used for compatibility with plonky2-ecdsa ecosystem
 bincode = "1.3"

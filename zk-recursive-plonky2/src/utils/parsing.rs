@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use plonky2::field::types::{PrimeField, PrimeField64};
-use plonky2::iop::witness::PartialWitness;
+use plonky2::iop::witness::{PartialWitness};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
 

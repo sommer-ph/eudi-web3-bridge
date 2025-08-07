@@ -18,7 +18,7 @@ use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use serde_json;
 
 use crate::utils::parsing::{hex_to_bigint, set_nonnative_target};
-use crate::types::input::{OuterKeyDerInput, OuterSigVerifyInput, Bip32KeyDerInput};
+use crate::types::input::{OuterKeyDerInput, OuterSigVerifyInput, Bip32KeyDerInput, InnerSigVerifyStaticInput};
 use hex;
 
 const D: usize = 2;
@@ -345,6 +345,58 @@ pub fn generate_exp_bip32_key_der_proof(
     println!("BIP32 key derivation proof saved: {} bytes", proof_data.len());
     
     println!("Experimental BIP32 key derivation proof generation completed in: {:?}", start.elapsed());
+    
+    Ok(())
+}
+
+/// Generate experimental inner signature verification proof with static public key
+pub fn generate_exp_inner_sig_verify_static_proof(
+    inner: &crate::circuits::experiments::InnerSigVerifyStaticCircuit,
+    input_file: &str,
+    build_dir: &Path,
+) -> Result<()> {
+    println!("Loading inner signature verification (static PK) input data from: {}", input_file);
+    let input_data = fs::read_to_string(input_file)?;
+    let input: InnerSigVerifyStaticInput = serde_json::from_str(&input_data)?;
+    
+    let start = Instant::now();
+    
+    // Parse signature verification proof inputs
+    // No pk_issuer needed - it's fixed in the circuit
+    let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
+    let sig_r = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.r));
+    let sig_s = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.s));
+    
+    // Set up inner signature verification circuit witness (static PK)
+    let mut pw = PartialWitness::<F>::new();
+    // No need to set pk_issuer - it's fixed in the circuit
+    set_nonnative_target(&mut pw, &inner.targets.msg, msg)?;
+    set_nonnative_target(&mut pw, &inner.targets.sig.r, sig_r)?;
+    set_nonnative_target(&mut pw, &inner.targets.sig.s, sig_s)?;
+    
+    // Generate inner signature verification proof with static PK
+    println!("Generating inner signature verification (static PK) proof...");
+    let mut timing = TimingTree::new("inner_sig_verify_static_proof", Level::Info);
+    let proof = prove(&inner.data.prover_only, &inner.data.common, pw, &mut timing)?;
+    println!("Inner signature verification (static PK) proof timing breakdown:");
+    timing.print();
+    println!("Inner signature verification (static PK) proof size: {} bytes", proof.to_bytes().len());
+    
+    // Verify inner signature verification proof with static PK
+    println!("Verifying inner signature verification (static PK) proof...");
+    let verify_start = Instant::now();
+    inner.data.verify(proof.clone())?;
+    println!("Inner signature verification (static PK) proof verification time: {:?}", verify_start.elapsed());
+
+    // Save inner signature verification proof with static PK
+    println!("Serializing and saving inner signature verification (static PK) proof...");
+    let save_start = Instant::now();
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("exp_inner_sig_verify_static_proof.bin"), &proof_data)?;
+    println!("Inner signature verification (static PK) proof serialization + save time: {:?}", save_start.elapsed());
+    println!("Inner signature verification (static PK) proof saved: {} bytes", proof_data.len());
+    
+    println!("Experimental inner signature verification (static PK) proof generation completed in: {:?}", start.elapsed());
     
     Ok(())
 }
