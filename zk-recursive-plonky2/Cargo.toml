@@ -12,52 +12,12 @@ name = "zk-recursive"
 path = "src/main.rs"
 
 [[bin]]
-name = "generate_outer_data"
-path = "inputs/tools/generate_outer_data.rs"
+name = "generate"
+path = "inputs/tools/generate.rs"
 
 [[bin]]
-name = "check_outer_data"
-path = "inputs/tools/check_outer_data.rs"
-
-[[bin]]
-name = "generate_outer_extended_data"
-path = "inputs/tools/generate_outer_extended_data.rs"
-
-[[bin]]
-name = "check_outer_extended_data"
-path = "inputs/tools/check_outer_extended_data.rs"
-
-[[bin]]
-name = "generate_outer_key_der_data"
-path = "inputs/tools/generate_outer_key_der_data.rs"
-
-[[bin]]
-name = "check_outer_key_der_data"
-path = "inputs/tools/check_outer_key_der_data.rs"
-
-[[bin]]
-name = "generate_outer_sig_verify_data"
-path = "inputs/tools/generate_outer_sig_verify_data.rs"
-
-[[bin]]
-name = "check_outer_sig_verify_data"
-path = "inputs/tools/check_outer_sig_verify_data.rs"
-
-[[bin]]
-name = "generate_inner_sig_verify_static_data"
-path = "inputs/tools/generate_inner_sig_verify_static_data.rs"
-
-[[bin]]
-name = "check_inner_sig_verify_static_data"
-path = "inputs/tools/check_inner_sig_verify_static_data.rs"
-
-[[bin]]
-name = "generate_bip32_key_der_data"
-path = "inputs/tools/generate_bip32_key_der_data.rs"
-
-[[bin]]
-name = "check_bip32_key_der_data"
-path = "inputs/tools/check_bip32_key_der_data.rs"
+name = "check"
+path = "inputs/tools/check.rs"
 
 [dependencies]
 plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2", features = ["timing"] }

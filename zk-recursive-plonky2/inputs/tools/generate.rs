@@ -1,12 +1,19 @@
 use anyhow::Result;
 use clap::Parser;
 use num_bigint::BigUint;
-use num_traits::Num;
 use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
 use plonky2::field::types::{Field, PrimeField, Sample};
-use plonky2_ecdsa::curve::{ecdsa::ECDSASecretKey, secp256k1::Secp256K1};
+use plonky2_ecdsa::{
+    curve::{
+        ecdsa::{sign_message, ECDSASecretKey},
+        p256::P256,
+        secp256k1::Secp256K1,
+    },
+    field::p256_scalar::P256Scalar,
+};
 use serde::Serialize;
 use std::{fs, path::PathBuf};
+use num_traits::Num;
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use k256::{SecretKey, elliptic_curve::sec1::ToEncodedPoint};
@@ -16,7 +23,7 @@ type HmacSha512 = Hmac<Sha512>;
 #[derive(Parser)]
 struct Args {
     /// Output file path
-    #[arg(short, long, default_value = "inputs/experiments/bip32_key_der.json")]
+    #[arg(short, long, default_value = "inputs/input.json")]
     output: PathBuf,
     
     /// Derivation index (non-hardened, must be < 2^31)
@@ -31,13 +38,26 @@ struct Point {
 }
 
 #[derive(Serialize)]
-struct Bip32KeyDerInput {
-    // Parent key and chain code (parent public key is private input)
+struct Signature {
+    r: String,
+    s: String,
+}
+
+#[derive(Serialize)]
+struct FullInput {
+    // Inner circuit fields (EUDI + secp256k1) - using static pk for ECDSA
+    pk_issuer: Point,  // Fixed static public key from sig_verify_static
+    msg: String,
+    signature: Signature,
+    pk_c: Point,
+    sk_c: String,
+    sk_0: String,
     pk_0: Point,
+    
+    // Outer circuit BIP32 fields
     cc_0: String,
-    // Derivation parameters and expected results (public inputs)
     derivation_index: u32,
-    pk_i: Point,
+    pk_i: Point, 
     cc_i: String,
 }
 
@@ -73,14 +93,55 @@ fn main() -> Result<()> {
         return Err(anyhow::anyhow!("Derivation index must be < 2^31 (non-hardened)"));
     }
 
-    println!("Generating BIP32 key derivation proof input with derivation index: {}", args.derivation_index);
+    println!("Generating full input with derivation index: {}", args.derivation_index);
 
-    // ---------- 1. secp256k1 Parent Key ----------
+    // ---------- 1. EUDI P-256 Data (Inner Part) - Using Static PK ----------
+    
+    // Use the fixed private key from sig_verify_static specification 
+    let sk_issuer_fixed = "46012408107196755923706193987463047920137073659172279781266729514345066549384";
+    let sk_issuer_val = P256Scalar::from_noncanonical_biguint(
+        BigUint::from_str_radix(sk_issuer_fixed, 10)?
+    );
+    let sk_issuer = ECDSASecretKey::<P256>(sk_issuer_val);
+    let pk_issuer = sk_issuer.to_public().0;
+
+    // Verify that the public key matches the expected fixed coordinates from sig_verify_static
+    let expected_x = "66432692286261411630769223098970693805397596870633670159153355502222145619968";
+    let expected_y = "63182586149833488067701290985084360701345487374231728189741684364091950142361";
+    let expected_x_big = BigUint::from_str_radix(expected_x, 10)?;
+    let expected_y_big = BigUint::from_str_radix(expected_y, 10)?;
+    assert_eq!(pk_issuer.x.to_canonical_biguint(), expected_x_big);
+    assert_eq!(pk_issuer.y.to_canonical_biguint(), expected_y_big);
+    
+    println!("Using fixed issuer public key from sig_verify_static:");
+    println!("  x: {}", expected_x);
+    println!("  y: {}", expected_y);
+
+    let msg = P256Scalar::rand();
+    let mut sig = sign_message(msg, sk_issuer);
+
+    // Low-s normalization for P-256
+    const N_HEX: &str = "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551";
+    let n = BigUint::from_str_radix(N_HEX, 16).unwrap();
+    let n_half = &n >> 1;
+
+    let s_big = sig.s.to_canonical_biguint();
+    if s_big > n_half {
+        let s_low = &n - s_big;
+        sig.s = P256Scalar::from_noncanonical_biguint(s_low);
+    }
+
+    // EUDI Credential Key (P-256)
+    let sk_c_scalar = P256Scalar::rand();
+    let sk_c = ECDSASecretKey::<P256>(sk_c_scalar);
+    let pk_c = sk_c.to_public().0;
+
+    // ---------- 2. secp256k1 Parent Key (Inner + Outer Part) ----------
     let sk_0_scalar = Secp256K1Scalar::rand();
     let sk_0 = ECDSASecretKey::<Secp256K1>(sk_0_scalar);
     let pk_0_point = sk_0.to_public().0;
 
-    // ---------- 2. BIP32 Key Derivation ----------
+    // ---------- 3. BIP32 Key Derivation (Outer Part) ----------
     
     // Generate parent chain code (32 random bytes)
     let parent_chain_code: [u8; 32] = (0..32)
@@ -142,16 +203,33 @@ fn main() -> Result<()> {
     println!("  Child chain code: {}", bytes_to_hex(child_chain_code_bytes));
     println!("  I_L: {}", to_hex(&il_scalar));
 
-    // ---------- 3. Generate Output JSON ----------
-    let json = Bip32KeyDerInput {
-        // Parent key (pk_0 is private input, cc_0 is public)
+    // ---------- 4. Generate Output JSON ----------
+    let json = FullInput {
+        // Inner circuit fields (EUDI P-256) - using static pk
+        pk_issuer: Point {
+            x: to_hex(&pk_issuer.x),
+            y: to_hex(&pk_issuer.y),
+        },
+        msg: to_hex(&msg),
+        signature: Signature {
+            r: to_hex(&sig.r),
+            s: to_hex(&sig.s),
+        },
+        pk_c: Point {
+            x: to_hex(&pk_c.x),
+            y: to_hex(&pk_c.y),
+        },
+        sk_c: to_hex(&sk_c_scalar),
+        
+        // secp256k1 parent key (connects inner and outer)
+        sk_0: to_hex(&sk_0_scalar),
         pk_0: Point {
             x: to_hex_biguint(&pk_0_point.x.to_canonical_biguint()),
             y: to_hex_biguint(&pk_0_point.y.to_canonical_biguint()),
         },
-        cc_0: bytes_to_hex(&parent_chain_code),
         
-        // Derivation parameters and expected results (all public inputs)
+        // BIP32 derivation data (outer circuit)
+        cc_0: bytes_to_hex(&parent_chain_code),
         derivation_index: args.derivation_index,
         pk_i: Point {
             x: to_hex_biguint(&child_public_key.x.to_canonical_biguint()),
@@ -161,6 +239,7 @@ fn main() -> Result<()> {
     };
 
     fs::write(&args.output, serde_json::to_string_pretty(&json)?)?;
-    println!("\nBIP32 key derivation proof input JSON written to {:?}", args.output);
+    println!("\nUnified input JSON written to {:?}", args.output);
+    println!("Note: Uses static public key from sig_verify_static for ECDSA signature verification");
     Ok(())
 }

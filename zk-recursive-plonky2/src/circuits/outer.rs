@@ -1,192 +1,116 @@
-use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 
-use plonky2_ecdsa::curve::curve_types::Curve;
-use plonky2_ecdsa::curve::secp256k1::Secp256K1;
-use plonky2_ecdsa::gadgets::curve::CircuitBuilderCurve;
-use plonky2_ecdsa::gadgets::curve_fixed_base::fixed_base_curve_mul_circuit;
-use plonky2_ecdsa::gadgets::nonnative::CircuitBuilderNonNative;
+use crate::utils::key_derivation::{
+    add_bip32_key_derivation_constraints, Bip32KeyDerivationTargets
+};
+use crate::utils::bit_packing::{pack_256_bits_to_field_elements, pack_32_bits_to_field_element};
+use crate::types::input::SignatureMode;
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
-/// Targets returned when building the outer circuit.
+/// Targets for the outer circuit.
 #[allow(dead_code)]
 pub struct OuterCircuitTargets {
-    pub pk_0: plonky2_ecdsa::gadgets::curve::AffinePointTarget<Secp256K1>,
-    pub sk_0: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<Secp256K1Scalar>,
+    // Recursive verification targets
     pub proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
+    
+    // BIP32 Key Derivation targets (C5)
+    pub bip32_targets: Bip32KeyDerivationTargets,
 }
 
-/// Circuit and targets for the outer recursive circuit.
+/// Outer circuit that recursively verifies the inner proof and performs BIP32 key derivation.
 #[allow(dead_code)]
 pub struct OuterCircuit {
     pub data: CircuitData<F, Cfg, D>,
     pub targets: OuterCircuitTargets,
+    pub inner_signature_mode: SignatureMode,
 }
 
-/// Build the outer circuit proving secp256k1 key derivation and recursively verifying the inner proof.
-/// This corresponds to the blockchain wallet key derivation circuit that:
-/// 1. Proves pk_0 = KeyDer(sk_0) over secp256k1 
-/// 2. Recursively verifies the inner EUDI credential binding proof
-pub fn build_outer_circuit(inner_common: &CommonCircuitData<F, D>) -> OuterCircuit {
+/// Build the outer circuit that recursively verifies the inner proof
+/// and performs BIP32 non-hardened key derivation.
+/// This circuit always implements:
+/// - Recursive verification of inner proof (C1-C4)
+/// - C5: BIP32 non-hardened key derivation: pk_i = KeyDer(pk_0, cc_0, i)
+pub fn build_outer_circuit(
+    inner_common: &CommonCircuitData<F, D>,
+    inner_signature_mode: SignatureMode,
+) -> OuterCircuit {
     let config = CircuitConfig::standard_ecc_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
     
-    // Public input: secp256k1 blockchain wallet public key (pk_0)
-    let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
-    for limb in pk_0.x.value.limbs.iter().chain(pk_0.y.value.limbs.iter()) {
-        builder.register_public_input(limb.0);
-    }
-
-    // Private input: secp256k1 blockchain wallet secret key (sk_0)
-    let sk_0 = builder.add_virtual_nonnative_target::<Secp256K1Scalar>();
-
-    // === Blockchain Wallet Key Derivation (pk_0 = KeyDer(sk_0)) ===
-    // Derive public key from secret key using secp256k1 base point multiplication
-    let pk_0_calc = fixed_base_curve_mul_circuit::<Secp256K1, F, D>(
-        &mut builder,
-        Secp256K1::GENERATOR_AFFINE,
-        &sk_0,
-    );
-    builder.connect_affine_point(&pk_0_calc, &pk_0);
-
     // === Recursive Proof Verification ===
-    // Add targets for the proof of the inner EUDI circuit and verify it recursively
+    // Add targets for the proof of the inner circuit and verify it recursively
     let proof = builder.add_virtual_proof_with_pis(inner_common);
     let vd = builder.add_virtual_verifier_data(inner_common.config.fri_config.cap_height);
     builder.verify_proof::<Cfg>(&proof, &vd, inner_common);
 
+    // === C5: BIP32 Non-Hardened Key Derivation ===
+    // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)
+    let bip32_targets = add_bip32_key_derivation_constraints(&mut builder);
+    
+    // === Public Inputs Registration (Optimized with Bit Packing) ===
+    println!("Optimizing public inputs: Packing bits into field elements...");
+    
+    // Pack cc_0 (256 bits) into 4 field elements
+    let cc_0_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_0, &mut builder);
+    for &target in &cc_0_packed {
+        builder.register_public_input(target);
+    }
+    
+    // Pack derivation_index (32 bits) into 1 field element  
+    let index_packed = pack_32_bits_to_field_element(&bip32_targets.derivation_index, &mut builder);
+    builder.register_public_input(index_packed);
+    
+    // Register pk_i as public input
+    for limb in bip32_targets.pk_i.x.value.limbs.iter().chain(
+        bip32_targets.pk_i.y.value.limbs.iter()
+    ) {
+        builder.register_public_input(limb.0);
+    }
+    
+    // Pack cc_i (256 bits) into 4 field elements
+    let cc_i_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_i, &mut builder);
+    for &target in &cc_i_packed {
+        builder.register_public_input(target);
+    }
+        
     let data = builder.build::<Cfg>();
     let targets = OuterCircuitTargets {
-        pk_0,
-        sk_0,
         proof,
         vd,
+        bip32_targets,
     };
-    OuterCircuit { data, targets }
+    
+    OuterCircuit { 
+        data, 
+        targets, 
+        inner_signature_mode,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::circuits::inner::build_inner_circuit;
-    use anyhow::Result;
-    use plonky2::field::types::{Sample, PrimeField};
-    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
-    use plonky2_ecdsa::curve::ecdsa::{sign_message, ECDSASecretKey};
-    use plonky2_ecdsa::curve::p256::P256;
-    use plonky2_ecdsa::field::p256_scalar::P256Scalar;
-    use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
-    use crate::utils::parsing::set_nonnative_target;
-
+    
     #[test]
-    #[ignore]
-    fn test_recursive_proof() -> Result<()> {
-        use std::time::Instant;
-        
-        println!("=== RECURSIVE ZK-SNARK PROOF SYSTEM ===");
-        let total_start = Instant::now();
-
-        println!("\n=== INNER CIRCUIT: EUDI CREDENTIAL BINDING ===");
-        
-        // Build inner circuit and generate witness.
-        let inner_start = Instant::now();
-        let inner = build_inner_circuit();
-        println!("Inner circuit building time: {:?}", inner_start.elapsed());
-        println!("Inner circuit size: {} gates", inner.data.common.degree());
-
-        println!("\nGenerating inner circuit test data...");
-        let data_start = Instant::now();
-        let msg = P256Scalar::rand();
-        let sk_issuer_val = P256Scalar::rand();
-        let sk_issuer = ECDSASecretKey::<P256>(sk_issuer_val);
-        let pk_issuer = sk_issuer.to_public().0;
-        let sig = sign_message(msg, sk_issuer);
-
-        let sk_c_val = P256Scalar::rand();
-        let sk_c = ECDSASecretKey::<P256>(sk_c_val);
-        let pk = sk_c.to_public().0;
-        println!("Inner test data generation time: {:?}", data_start.elapsed());
-
-        println!("\nSetting up inner circuit witness...");
-        let witness_start = Instant::now();
-        let mut pw1 = PartialWitness::<F>::new();
-        pw1.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer.x.to_canonical_biguint())?;
-        pw1.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer.y.to_canonical_biguint())?;
-        set_nonnative_target(&mut pw1, &inner.targets.msg, msg)?;
-        set_nonnative_target(&mut pw1, &inner.targets.sig.r, sig.r)?;
-        set_nonnative_target(&mut pw1, &inner.targets.sig.s, sig.s)?;
-        pw1.set_biguint_target(&inner.targets.pk_c.x.value, &pk.x.to_canonical_biguint())?;
-        pw1.set_biguint_target(&inner.targets.pk_c.y.value, &pk.y.to_canonical_biguint())?;
-        set_nonnative_target(&mut pw1, &inner.targets.sk_c, sk_c_val)?;
-        println!("Inner witness setup time: {:?}", witness_start.elapsed());
-
-        println!("\nGenerating inner circuit proof...");
-        let prove1_start = Instant::now();
-        let proof1 = inner.data.prove(pw1)?;
-        let prove1_time = prove1_start.elapsed();
-        println!("Inner proof generation time: {:?}", prove1_time);
-        println!("Inner proof size: {} bytes", proof1.to_bytes().len());
-
-        println!("\nVerifying inner circuit proof...");
-        let verify1_start = Instant::now();
-        inner.data.verify(proof1.clone())?;
-        println!("Inner proof verification time: {:?}", verify1_start.elapsed());
-        
-        let inner_total = inner_start.elapsed();
-        println!("Inner circuit total time: {:?}", inner_total);
-
-        println!("\n=== OUTER CIRCUIT: RECURSIVE CIRCUIT WITH SECP256K1 ===");
-
-        // Build outer circuit and prove recursively.
-        let outer_start = Instant::now();
-        let outer = build_outer_circuit(&inner.data.common);
-        println!("Outer circuit building time: {:?}", outer_start.elapsed());
-        println!("Outer circuit size: {} gates", outer.data.common.degree());
-
-        println!("\nGenerating outer circuit test data...");
-        let data2_start = Instant::now();
-        let sk_0_val = Secp256K1Scalar::rand();
-        let sk_0 = ECDSASecretKey::<Secp256K1>(sk_0_val);
-        let pk_0 = sk_0.to_public().0;
-        println!("Outer test data generation time: {:?}", data2_start.elapsed());
-
-        println!("\nSetting up outer circuit witness...");
-        let witness2_start = Instant::now();
-        let mut pw2 = PartialWitness::<F>::new();
-        pw2.set_biguint_target(&outer.targets.pk_0.x.value, &pk_0.x.to_canonical_biguint())?;
-        pw2.set_biguint_target(&outer.targets.pk_0.y.value, &pk_0.y.to_canonical_biguint())?;
-        set_nonnative_target(&mut pw2, &outer.targets.sk_0, sk_0_val)?;
-        pw2.set_proof_with_pis_target(&outer.targets.proof, &proof1)?;
-        pw2.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
-        println!("Outer witness setup time: {:?}", witness2_start.elapsed());
-
-        println!("\nGenerating outer circuit recursive proof...");
-        let prove2_start = Instant::now();
-        let proof2 = outer.data.prove(pw2)?;
-        let prove2_time = prove2_start.elapsed();
-        println!("Outer proof generation time: {:?}", prove2_time);
-        println!("Outer proof size: {} bytes", proof2.to_bytes().len());
-
-        println!("\nVerifying outer circuit recursive proof...");
-        let verify2_start = Instant::now();
-        let result = outer.data.verify(proof2);
-        println!("Outer proof verification time: {:?}", verify2_start.elapsed());
-        
-        let outer_total = outer_start.elapsed();
-        println!("Outer circuit total time: {:?}", outer_total);
-        
-        println!("\n=== PERFORMANCE SUMMARY ===");
-        println!("Inner Circuit (EUDI) total time: {:?}", inner_total);
-        println!("Outer Circuit (Recursive) total time: {:?}", outer_total);
-        println!("Total recursive proof system time: {:?}", total_start.elapsed());
-        println!("=== RECURSIVE PROOF COMPLETE ===\n");
-        
-        result
+    fn test_build_outer_circuit_with_static_inner() {
+        let inner = build_inner_circuit(SignatureMode::Static);
+        let outer = build_outer_circuit(&inner.data.common, SignatureMode::Static);
+        println!("Outer circuit (static inner) built successfully");
+        println!("Circuit size: {} gates", outer.data.common.degree());
+    }
+    
+    #[test]
+    fn test_build_outer_circuit_with_dynamic_inner() {
+        let inner = build_inner_circuit(SignatureMode::Dynamic);
+        let outer = build_outer_circuit(&inner.data.common, SignatureMode::Dynamic);
+        println!("Outer circuit (dynamic inner) built successfully");
+        println!("Circuit size: {} gates", outer.data.common.degree());
     }
 }

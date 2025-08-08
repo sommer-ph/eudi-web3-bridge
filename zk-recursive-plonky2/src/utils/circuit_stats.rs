@@ -24,61 +24,58 @@ pub fn print_circuit_stats(name: &str, cd: &CommonCircuitData<F, D>) {
     println!("\n{name} Circuit Summary");
     println!("{}", "=".repeat(40));
 
+    let mut gate_stats = HashMap::<String, (usize, usize)>::new(); // (selector_cols, max_constraints)
     let idx = &cd.selectors_info.selector_indices;
-    let mut gate_stats = HashMap::<String, (usize, usize)>::new(); // (instances, constraints)
 
-    let mut total_gate_instances = 0;
-    let mut total_constraints = 0;
-
+    // Note: We can only access gate types and selector indices from CommonCircuitData.
+    // Actual gate instance counts would require access to the selector polynomial evaluations
+    // which are not available in CommonCircuitData. So we show gate types and their
+    // theoretical maximum constraint contribution.
+    
     for (gate_idx, gate_ref) in cd.gates.iter().enumerate() {
-        let base_type = extract_gate_base_type(&gate_ref.0.id());
-        let constraints_per_instance = gate_ref.0.num_constraints();
-        let instances = if gate_idx + 1 < idx.len() {
+        let gate = &gate_ref.0;
+        let base_type = extract_gate_base_type(&gate.id());
+        let constraints_per_instance = gate.num_constraints();
+        
+        // Number of selector columns for this gate type
+        let selector_cols = if gate_idx + 1 < idx.len() {
             idx[gate_idx + 1] - idx[gate_idx]
         } else {
-            0
+            cd.selectors_info.num_selectors() - idx[gate_idx]
         };
-        let total_constraints_for_gate = instances * constraints_per_instance;
-        if instances > 0 {
+
+        if constraints_per_instance > 0 {
             gate_stats
                 .entry(base_type)
                 .and_modify(|e| {
-                    e.0 += instances;
-                    e.1 += total_constraints_for_gate;
+                    e.0 += selector_cols;
+                    e.1 = e.1.max(constraints_per_instance);
                 })
-                .or_insert((instances, total_constraints_for_gate));
+                .or_insert((selector_cols, constraints_per_instance));
         }
-
-        total_gate_instances += instances;
-        total_constraints += total_constraints_for_gate;
     }
 
-    let circuit_rows = cd.degree();
-    let utilization = if circuit_rows > 0 {
-        (total_gate_instances as f64 / circuit_rows as f64) * 100.0
-    } else {
-        0.0
-    };
+    let total_gate_types = gate_stats.len();
+    let total_selector_cols: usize = gate_stats.values().map(|(cols, _)| cols).sum();
+    let max_constraints_per_row: usize = gate_stats.values().map(|(_, constraints)| constraints).sum();
 
     // Summary block
     println!("Circuit Rows (degree):     {}", cd.degree());
     println!("Public Inputs:             {}", cd.num_public_inputs);
     println!("Constants:                 {}", cd.num_constants);
-    println!("Active Gate Types:         {}", gate_stats.len());
-    println!("Total Gate Instances:      {}", total_gate_instances);
-    println!("Total Constraints:         {} ({:.2}k)", total_constraints, total_constraints as f64 / 1000.0);
-    println!("Utilization:               {:.2}%", utilization);
+    println!("Gate Types:                {}", total_gate_types);
+    println!("Selector Columns:          {}", total_selector_cols);
+    println!("Max Constraints/Row:       {}", max_constraints_per_row);
     println!();
 
-    // Gate breakdown
-    println!("Top Gates (sorted by constraints):");
+    // Gate breakdown - sorted by constraints per instance
+    println!("Gate Types (sorted by constraints per instance):");
     let mut sorted_gates: Vec<_> = gate_stats.into_iter().collect();
     sorted_gates.sort_by(|a, b| b.1.1.cmp(&a.1.1));
 
-    println!("{:<25} {:>7} {:>12} {:>7}", "Gate", "Count", "Constraints", "Share");
-    for (gate, (instances, constraints)) in &sorted_gates {
-        let pct = (*constraints as f64 / total_constraints as f64) * 100.0;
-        println!("{:<25} {:>7} {:>12} {:>6.1}%", gate, instances, constraints, pct);
+    println!("{:<25} {:>8} {:>15}", "Gate", "Selectors", "Constraints/Inst");
+    for (gate, (selector_cols, constraints_per_inst)) in &sorted_gates {
+        println!("{:<25} {:>8} {:>15}", gate, selector_cols, constraints_per_inst);
     }
 
     println!();
