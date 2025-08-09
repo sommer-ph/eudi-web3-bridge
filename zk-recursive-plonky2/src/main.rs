@@ -4,7 +4,7 @@ use anyhow::Result;
 use env_logger::Env;
 
 use zk_recursive::utils::circuit_stats::print_circuit_stats;
-use zk_recursive::types::input::SignatureMode;
+use zk_recursive::types::input::{SignatureMode, DeriveMode};
 
 /// Command-line arguments for the zk-recursive proof generator
 #[derive(Parser)]
@@ -34,6 +34,8 @@ enum Commands {
         input: String,
         #[arg(long, default_value = "dynamic", help = "Inner signature verification mode: static or dynamic")]
         inner_sig_mode: String,
+        #[arg(long, default_value = "sha512", help = "Outer key derivation mode: sha512 or poseidon")]
+        outer_derive_mode: String,
     },
 }
 
@@ -75,7 +77,7 @@ fn main() -> Result<()> {
             use zk_recursive::commands::inner::generate_inner_proof;
             generate_inner_proof(&inner, &input, &build_dir)?;
         },
-        Some(Commands::Outer { input, inner_sig_mode }) => {
+        Some(Commands::Outer { input, inner_sig_mode, outer_derive_mode }) => {
             use zk_recursive::circuits::{inner::build_inner_circuit, outer::build_outer_circuit};
             
             let signature_mode = match inner_sig_mode.as_str() {
@@ -87,7 +89,16 @@ fn main() -> Result<()> {
                 }
             };
             
-            println!("\nBuilding Recursive Circuits with {} inner signature verification...", inner_sig_mode);
+            let derive_mode = match outer_derive_mode.as_str() {
+                "sha512" => DeriveMode::Sha512,
+                "poseidon" => DeriveMode::Poseidon,
+                _ => {
+                    eprintln!("Invalid outer derive mode: {}. Use 'sha512' or 'poseidon'", outer_derive_mode);
+                    std::process::exit(1);
+                }
+            };
+            
+            println!("\nBuilding Recursive Circuits with {} inner signature verification and {} outer derive mode...", inner_sig_mode, outer_derive_mode);
             let inner_start = Instant::now();
             let inner = build_inner_circuit(signature_mode.clone());
             let inner_total = inner_start.elapsed();
@@ -95,7 +106,7 @@ fn main() -> Result<()> {
             print_circuit_stats("Inner", &inner.data.common);
             
             let outer_start = Instant::now();
-            let outer = build_outer_circuit(&inner.data.common, signature_mode);
+            let outer = build_outer_circuit(&inner.data.common, signature_mode, derive_mode);
             let outer_total = outer_start.elapsed();
             println!("Outer circuit build time: {:?}", outer_total);
             print_circuit_stats("Outer", &outer.data.common);
@@ -108,8 +119,10 @@ fn main() -> Result<()> {
             println!("\nNo command specified. Available commands:");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode dynamic");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode static");
-            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic");
-            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic --outer-derive-mode sha512");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic --outer-derive-mode poseidon");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static --outer-derive-mode sha512");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static --outer-derive-mode poseidon");
         }
     }
     

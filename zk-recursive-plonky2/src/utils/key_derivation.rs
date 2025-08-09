@@ -12,6 +12,58 @@ use plonky2_ecdsa::gadgets::curve_fixed_base::fixed_base_curve_mul_circuit;
 use plonky2_ecdsa::gadgets::nonnative::CircuitBuilderNonNative;
 
 use crate::utils::hmac_sha512::{add_hmac_sha512_constraints, add_hmac_sha512_constraints_fixed_32_37};
+use crate::utils::hmac_poseidon::add_hmac_poseidon_constraints;
+use crate::types::input::DeriveMode;
+
+/// Reverses bit order within each byte: MSB-first per byte <-> LSB-first per byte
+/// This is needed for converting between JSON format (MSB-first) and Poseidon format (LSB-first)
+fn per_byte_reverse(bits: &[BoolTarget]) -> Vec<BoolTarget> {
+    assert!(bits.len() % 8 == 0);
+    let mut out = Vec::with_capacity(bits.len());
+    for chunk in bits.chunks(8) {
+        out.extend(chunk.iter().rev().cloned());
+    }
+    out
+}
+
+/// Converts public key point to compressed format (33 bytes) with LSB-first bit ordering
+fn public_key_to_compressed_bytes_lsb<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    public_key: &AffinePointTarget<Secp256K1>,
+) -> Vec<BoolTarget> {
+    let mut out = Vec::with_capacity(33 * 8);
+
+    // y-parity (odd -> prefix 0x03, even -> 0x02)
+    let y_bits_le = builder.split_le_base::<2>(public_key.y.value.limbs[0].0, 32);
+    let is_odd = BoolTarget::new_unsafe(y_bits_le[0]);
+
+    // Prefix byte in LSB-first bit order: 0x02/0x03 = 0000_0010 / 0000_0011
+    // LSB-first: [b0..b7] = [parity, 1, 0, 0, 0, 0, 0, 0]
+    out.push(is_odd);                         // b0
+    out.push(builder.constant_bool(true));    // b1
+    out.push(builder.constant_bool(false));   // b2
+    out.push(builder.constant_bool(false));   // b3
+    out.push(builder.constant_bool(false));   // b4
+    out.push(builder.constant_bool(false));   // b5
+    out.push(builder.constant_bool(false));   // b6
+    out.push(builder.constant_bool(false));   // b7
+
+    // X coordinate: 32 bytes, big-endian byte order, but each byte LSB-first.
+    // limbs are little-endian (limbs[0] = least significant 32 bits).
+    for limb_idx in (0..public_key.x.value.limbs.len()).rev() {
+        let limb = public_key.x.value.limbs[limb_idx].0;
+        let limb_bits_le = builder.split_le_base::<2>(limb, 32); // bit 0..31 (LSB→MSB)
+        // Iterate bytes inside this 32-bit limb: byte3, byte2, byte1, byte0
+        for byte_in_limb in (0..4).rev() {
+            let start = byte_in_limb * 8;
+            for i in 0..8 {
+                out.push(BoolTarget::new_unsafe(limb_bits_le[start + i])); // LSB→MSB within byte
+            }
+        }
+    }
+
+    out
+}
 
 const BIP32_CHAIN_CODE_SIZE: usize = 32; // 32 bytes = 256 bits
 const BIP32_PRIVATE_KEY_SIZE: usize = 32; // 32 bytes = 256 bits
@@ -73,14 +125,15 @@ fn public_key_to_compressed_bytes<F: RichField + Extendable<D>, const D: usize>(
     compressed
 }
 
-/// BIP32 Non-Hardened Key Derivation Gadget (PUBLIC-TO-PUBLIC)
+/// BIP32 Non-Hardened Key Derivation Gadget (PUBLIC-TO-PUBLIC) with configurable derive mode
 ///
 /// Input: pk_0 (private), cc_0, index (where index < 2^31)
-/// Process: HMAC-SHA512(cc_0, compress(pk_0) || index)
+/// Process: HMAC-SHA512 or HMAC-Poseidon(cc_0, compress(pk_0) || index)
 /// Output: I_L (scalar), I_R (cc_i)
 /// Final: pk_i = pk_0 + I_L * G
 pub fn add_bip32_key_derivation_constraints<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
+    derive_mode: DeriveMode,
 ) -> Bip32KeyDerivationTargets {
     // Create virtual targets for inputs
     let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
@@ -107,8 +160,24 @@ pub fn add_bip32_key_derivation_constraints<F: RichField + Extendable<D>, const 
     let mut hmac_message = pk_0_compressed;
     hmac_message.extend_from_slice(&derivation_index_bits);
     
-    // Step 3: Compute HMAC-SHA512(cc_0, compress(pk_0) || derivation_index)
-    let hmac_output = add_hmac_sha512_constraints(builder, &cc_0, &hmac_message);
+    // Step 3: Compute HMAC with selected derive mode
+    let hmac_output = match derive_mode {
+        DeriveMode::Sha512 => add_hmac_sha512_constraints(builder, &cc_0, &hmac_message),
+        DeriveMode::Poseidon => {
+            // Convert inputs from MSB-first (JSON format) to LSB-first (Poseidon format)
+            let cc_0_lsb = per_byte_reverse(&cc_0);
+            let derivation_index_lsb = per_byte_reverse(&derivation_index_bits);
+            
+            // For Poseidon mode, use LSB-first bit ordering
+            let mut hmac_message_lsb = public_key_to_compressed_bytes_lsb(builder, &pk_0);
+            hmac_message_lsb.extend_from_slice(&derivation_index_lsb);
+            
+            let hmac_output = add_hmac_poseidon_constraints(builder, &cc_0_lsb, &hmac_message_lsb);
+            
+            // Convert Poseidon output back to MSB-first per byte for downstream code
+            per_byte_reverse(&hmac_output)
+        },
+    };
     
     // Step 4: Extract I_L (left 32 bytes) and I_R (right 32 bytes = cc_i)
     let mut i_l_bits = Vec::new();
@@ -191,19 +260,21 @@ pub fn add_bip32_key_derivation_constraints<F: RichField + Extendable<D>, const 
     }
 }
 
-/// Optimized BIP32 Non-Hardened Key Derivation using Fixed-Shape HMAC-SHA512
+/// Optimized BIP32 Non-Hardened Key Derivation with configurable derive mode
 ///
-/// This variant uses the optimized HMAC-SHA512 implementation specifically designed
-/// for BIP32 with fixed input sizes:
+/// This variant uses optimized implementations for BIP32 with fixed input sizes:
 /// - Key (cc_0): exactly 32 bytes (256 bits) 
 /// - Message: serP(pk_0) || index = 33 + 4 = 37 bytes (296 bits)
-///
-/// Benefits:
+/// 
+/// For SHA-512: Uses fixed-shape HMAC-SHA512 with optimizations:
 /// - Fixed block sizes eliminate dynamic padding logic
 /// - Constant ipad/opad generation
 /// - Eliminates loops and conditional branches in HMAC
+/// 
+/// For Poseidon: Uses domain-separated Poseidon hashes (already optimized)
 pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
+    derive_mode: DeriveMode,
 ) -> Bip32KeyDerivationTargets {
     // Create virtual targets for inputs (same as generic version)
     let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
@@ -232,8 +303,27 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
     hmac_message.extend_from_slice(&derivation_index_bits);
     debug_assert_eq!(hmac_message.len(), 296, "HMAC message must be 296 bits for fixed variant");
     
-    // Step 3: Use optimized fixed-shape HMAC-SHA512
-    let hmac_output = add_hmac_sha512_constraints_fixed_32_37(builder, &cc_0, &hmac_message);
+    // Step 3: Use optimized HMAC with selected derive mode
+    let hmac_output = match derive_mode {
+        DeriveMode::Sha512 => add_hmac_sha512_constraints_fixed_32_37(builder, &cc_0, &hmac_message),
+        DeriveMode::Poseidon => {
+            // Convert inputs from MSB-first (JSON format) to LSB-first (Poseidon format)
+            let cc_0_lsb = per_byte_reverse(&cc_0);
+            let derivation_index_lsb = per_byte_reverse(&derivation_index_bits);
+            
+            // For Poseidon mode, use LSB-first bit ordering
+            let mut hmac_message_lsb = public_key_to_compressed_bytes_lsb(builder, &pk_0);
+            hmac_message_lsb.extend_from_slice(&derivation_index_lsb);
+            while hmac_message_lsb.len() < 296 { 
+                hmac_message_lsb.push(builder.constant_bool(false)); 
+            }
+            
+            let hmac_output = add_hmac_poseidon_constraints(builder, &cc_0_lsb, &hmac_message_lsb);
+            
+            // Convert Poseidon output back to MSB-first per byte for downstream code
+            per_byte_reverse(&hmac_output)
+        },
+    };
     
     // Step 4: Extract I_L (left 32 bytes) and I_R (right 32 bytes = cc_i)
     let mut i_l_bits = Vec::new();
