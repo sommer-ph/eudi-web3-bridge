@@ -3,7 +3,7 @@ use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 
 use crate::utils::key_derivation::{
-    add_bip32_key_derivation_constraints, Bip32KeyDerivationTargets
+    add_bip32_key_derivation_constraints, add_bip32_key_derivation_constraints_fixed, Bip32KeyDerivationTargets
 };
 use crate::utils::bit_packing::{pack_256_bits_to_field_elements, pack_32_bits_to_field_element};
 use crate::types::input::SignatureMode;
@@ -40,6 +40,22 @@ pub fn build_outer_circuit(
     inner_common: &CommonCircuitData<F, D>,
     inner_signature_mode: SignatureMode,
 ) -> OuterCircuit {
+    build_outer_circuit_with_optimization(inner_common, inner_signature_mode, true)
+}
+
+/// Build the outer circuit with optional HMAC-SHA512 optimization
+/// 
+/// When `use_fixed_hmac` is true, uses the optimized fixed-shape HMAC-SHA512 
+/// 
+/// The fixed variant is specifically optimized for BIP32:
+/// - Key: cc_0 (exactly 32 bytes)
+/// - Message: serP(pk_0) || index (exactly 37 bytes)
+/// - Fixed block sizes, constant padding, no dynamic loops
+pub fn build_outer_circuit_with_optimization(
+    inner_common: &CommonCircuitData<F, D>,
+    inner_signature_mode: SignatureMode,
+    use_fixed_hmac: bool,
+) -> OuterCircuit {
     let config = CircuitConfig::standard_ecc_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
     
@@ -51,7 +67,13 @@ pub fn build_outer_circuit(
 
     // === C5: BIP32 Non-Hardened Key Derivation ===
     // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)
-    let bip32_targets = add_bip32_key_derivation_constraints(&mut builder);
+    let bip32_targets = if use_fixed_hmac {
+        println!("Using optimized fixed-shape HMAC-SHA512 for BIP32 derivation...");
+        add_bip32_key_derivation_constraints_fixed(&mut builder)
+    } else {
+        println!("Using generic HMAC-SHA512 for BIP32 derivation...");
+        add_bip32_key_derivation_constraints(&mut builder)
+    };
     
     // === Public Inputs Registration (Optimized with Bit Packing) ===
     println!("Optimizing public inputs: Packing bits into field elements...");
@@ -111,6 +133,14 @@ mod tests {
         let inner = build_inner_circuit(SignatureMode::Dynamic);
         let outer = build_outer_circuit(&inner.data.common, SignatureMode::Dynamic);
         println!("Outer circuit (dynamic inner) built successfully");
+        println!("Circuit size: {} gates", outer.data.common.degree());
+    }
+
+    #[test]
+    fn test_build_outer_circuit_with_optimized_hmac() {
+        let inner = build_inner_circuit(SignatureMode::Static);
+        let outer = build_outer_circuit_with_optimization(&inner.data.common, SignatureMode::Static, true);
+        println!("Outer circuit with optimized HMAC built successfully");
         println!("Circuit size: {} gates", outer.data.common.degree());
     }
 }

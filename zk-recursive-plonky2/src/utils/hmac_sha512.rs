@@ -28,7 +28,22 @@ fn byte_to_bool_targets<F: RichField + Extendable<D>, const D: usize>(
     bits
 }
 
-/// XOR two vectors of BoolTargets bit by bit
+/// XOR with constant bit (optimized, no multiplication gates)
+#[inline]
+fn xor_with_const_bit<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    k: BoolTarget,
+    pad_bit_is_one: bool,
+) -> BoolTarget {
+    if pad_bit_is_one {
+        // NOT is cheap (linear): 1 - k
+        builder.not(k)
+    } else {
+        k
+    }
+}
+
+/// XOR two vectors of BoolTargets bit by bit (kept for generic HMAC)
 fn xor_bool_vectors<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     a: &[BoolTarget],
@@ -181,6 +196,117 @@ pub fn add_hmac_sha512_constraints<F: RichField + Extendable<D>, const D: usize>
     // Step 9: Apply SHA512 padding to outer input and compute final HMAC
     let padded_outer_input = apply_sha512_padding(builder, &outer_input);
     sha512_circuit_with_preprocessed_input(builder, &padded_outer_input)
+}
+
+/// XOR key bits with padding constant for fixed-size operations (optimized)
+fn xor_key_with_pad<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    key_bits_256: &[BoolTarget], // Exactly 256 bits from cc_0
+    pad_byte: u8,                // 0x36 (ipad) or 0x5C (opad)
+) -> Vec<BoolTarget> {
+    debug_assert_eq!(key_bits_256.len(), 256);
+    let mut out = Vec::with_capacity(1024); // 128 bytes = 1024 bits
+
+    // First 32 bytes: k ⊕ pad
+    for byte_idx in 0..32 {
+        for bit_idx in 0..8 {
+            let pad_bit_is_one = ((pad_byte >> (7 - bit_idx)) & 1) == 1;
+            let kbit = key_bits_256[byte_idx * 8 + bit_idx];
+            out.push(xor_with_const_bit(builder, kbit, pad_bit_is_one));
+        }
+    }
+    
+    // Remaining 96 bytes: only Pad (const) – without XOR
+    for _ in 32..128 {
+        for bit_idx in 0..8 {
+            let pad_bit_is_one = ((pad_byte >> (7 - bit_idx)) & 1) == 1;
+            out.push(builder.constant_bool(pad_bit_is_one));
+        }
+    }
+    
+    debug_assert_eq!(out.len(), 1024);
+    out
+}
+
+/// Fixed SHA-512 padding for known input lengths
+fn sha512_pad_fixed<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    mut msg_bits: Vec<BoolTarget>,
+    total_len_bits: u128, // Pre-calculated constant length
+) -> Vec<BoolTarget> {
+    // Append 0x80 (binary: 10000000)
+    msg_bits.push(builder.constant_bool(true));
+    for _ in 0..7 {
+        msg_bits.push(builder.constant_bool(false));
+    }
+    
+    // Calculate zeros needed: pad to multiple of 1024, leaving 128 bits for length
+    let current_len = msg_bits.len();
+    let target_len_before_length = if current_len % 1024 <= 896 {
+        (current_len / 1024) * 1024 + 896
+    } else {
+        ((current_len / 1024) + 1) * 1024 + 896
+    };
+    
+    let zeros_needed = target_len_before_length - current_len;
+    for _ in 0..zeros_needed {
+        msg_bits.push(builder.constant_bool(false));
+    }
+    
+    // Append 128-bit length in big-endian format (as constants)
+    for i in (0..128).rev() {
+        let bit = ((total_len_bits >> i) & 1) == 1;
+        msg_bits.push(builder.constant_bool(bit));
+    }
+    
+    debug_assert_eq!(msg_bits.len() % 1024, 0);
+    msg_bits
+}
+
+/// Optimized HMAC-SHA512 for BIP32 non-hardened derivation
+/// 
+/// This fixed-shape variant is specifically optimized for:
+/// - Key: cc_0 (exactly 32 bytes = 256 bits)
+/// - Message: serP(pk_0) || index (exactly 33 + 4 = 37 bytes = 296 bits)
+/// 
+/// Optimizations:
+/// - Pre-computed constant padding bits
+/// - Fixed block sizes (exactly 2 blocks for both inner and outer hash)
+/// - No dynamic length calculations or loops
+/// - Constant ipad/opad generation
+/// 
+/// Expected significant constraint reduction compared to generic variant.
+pub fn add_hmac_sha512_constraints_fixed_32_37<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    key_bits_256: &[BoolTarget],  // cc_0: exactly 256 bits
+    msg_bits_296: &[BoolTarget],  // serP(pk_0) || index: exactly 296 bits
+) -> Vec<BoolTarget> {
+    debug_assert_eq!(key_bits_256.len(), 256, "Key must be exactly 256 bits for BIP32");
+    debug_assert_eq!(msg_bits_296.len(), 296, "Message must be exactly 296 bits for BIP32");
+    
+    // === Prepare fixed ipad and opad blocks ===
+    let ipad_block = xor_key_with_pad(builder, key_bits_256, IPAD); // 1024 bits
+    let opad_block = xor_key_with_pad(builder, key_bits_256, OPAD); // 1024 bits
+
+    // === Inner Hash: H((K' ⊕ ipad) || msg) ===
+    let mut inner_input = ipad_block;
+    inner_input.extend_from_slice(msg_bits_296);
+    // Total: 1024 + 296 = 1320 bits
+    
+    let inner_padded = sha512_pad_fixed(builder, inner_input, 1320);
+    debug_assert_eq!(inner_padded.len(), 2048, "Inner input should be exactly 2 blocks");
+    
+    let inner_digest = sha512_circuit_with_preprocessed_input(builder, &inner_padded);
+    
+    // === Outer Hash: H((K' ⊕ opad) || inner_digest) ===
+    let mut outer_input = opad_block;
+    outer_input.extend_from_slice(&inner_digest);
+    // Total: 1024 + 512 = 1536 bits
+    
+    let outer_padded = sha512_pad_fixed(builder, outer_input, 1536);
+    debug_assert_eq!(outer_padded.len(), 2048, "Outer input should be exactly 2 blocks");
+    
+    sha512_circuit_with_preprocessed_input(builder, &outer_padded)
 }
 
 #[cfg(test)]
