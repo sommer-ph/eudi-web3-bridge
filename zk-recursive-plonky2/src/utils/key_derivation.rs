@@ -15,6 +15,32 @@ use crate::utils::hmac_sha512::{add_hmac_sha512_constraints, add_hmac_sha512_con
 use crate::utils::hmac_poseidon::add_hmac_poseidon_constraints;
 use crate::types::input::DeriveMode;
 
+// Debug mode - set to true to expose intermediate values as public inputs
+const DEBUG_TAP: bool = true;
+
+/// Minimal debug helper functions
+fn tap_bits<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    bits: &[BoolTarget],
+) {
+    if DEBUG_TAP {
+        for b in bits {
+            builder.register_public_input(b.target);
+        }
+    }
+}
+
+fn tap_targets<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    targets: &[plonky2::iop::target::Target],
+) {
+    if DEBUG_TAP {
+        for &t in targets {
+            builder.register_public_input(t);
+        }
+    }
+}
+
 /// Reverses bit order within each byte: MSB-first per byte <-> LSB-first per byte
 /// This is needed for converting between JSON format (MSB-first) and Poseidon format (LSB-first)
 fn per_byte_reverse(bits: &[BoolTarget]) -> Vec<BoolTarget> {
@@ -187,11 +213,13 @@ pub fn add_bip32_key_derivation_constraints<F: RichField + Extendable<D>, const 
     for i in 0..(BIP32_PRIVATE_KEY_SIZE * 8) {
         i_l_bits.push(hmac_output[i]);
     }
+    tap_bits(builder, &i_l_bits);               // 256 bits I_L (MSB)
     
     // Right 256 bits = I_R = cc_i
     for i in (BIP32_PRIVATE_KEY_SIZE * 8)..(2 * BIP32_PRIVATE_KEY_SIZE * 8) {
         derived_cc_i_bits.push(hmac_output[i]);
     }
+    tap_bits(builder, &derived_cc_i_bits);      // 256 bits I_R/cc_i (MSB)
     
     // Step 5: Convert I_L bits to NonNativeTarget for ECC scalar multiplication
     // Create a virtual NonNativeTarget and constrain it to match the HMAC bits
@@ -294,8 +322,13 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
         cc_i.push(builder.add_virtual_bool_target_unsafe());
     }
     
+    // DEBUG: Tap input data (MSB per byte format)
+    tap_bits(builder, &cc_0);                    // 256 bits chain code
+    tap_bits(builder, &derivation_index_bits);   // 32 bits index
+    
     // Step 1: Convert pk_0 to compressed format (33 bytes = 264 bits)
     let pk_0_compressed = public_key_to_compressed_bytes(builder, &pk_0);
+    tap_bits(builder, &pk_0_compressed);         // 264 bits compressed pubkey (MSB)
     
     // Step 2: Concatenate compress(pk_0) || derivation_index for HMAC message
     // Total: 264 + 32 = 296 bits (exactly what the fixed variant expects)
@@ -310,6 +343,7 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
             // Convert inputs from MSB-first (JSON format) to LSB-first (Poseidon format)
             let cc_0_lsb = per_byte_reverse(&cc_0);
             let derivation_index_lsb = per_byte_reverse(&derivation_index_bits);
+            tap_bits(builder, &cc_0_lsb);            // 256 bits (LSB per byte)
             
             // For Poseidon mode, use LSB-first bit ordering
             let mut hmac_message_lsb = public_key_to_compressed_bytes_lsb(builder, &pk_0);
@@ -317,11 +351,13 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
             while hmac_message_lsb.len() < 296 { 
                 hmac_message_lsb.push(builder.constant_bool(false)); 
             }
+            tap_bits(builder, &hmac_message_lsb);    // 296 bits message (LSB per byte)
             
-            let hmac_output = add_hmac_poseidon_constraints(builder, &cc_0_lsb, &hmac_message_lsb);
+            let hmac_output_lsb = add_hmac_poseidon_constraints(builder, &cc_0_lsb, &hmac_message_lsb);
+            tap_bits(builder, &hmac_output_lsb);     // 512 bits Poseidon raw output (LSB)
             
             // Convert Poseidon output back to MSB-first per byte for downstream code
-            per_byte_reverse(&hmac_output)
+            per_byte_reverse(&hmac_output_lsb)
         },
     };
     
@@ -333,11 +369,13 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
     for i in 0..(BIP32_PRIVATE_KEY_SIZE * 8) {
         i_l_bits.push(hmac_output[i]);
     }
+    tap_bits(builder, &i_l_bits);               // 256 bits I_L (MSB)
     
     // Right 256 bits = I_R = cc_i
     for i in (BIP32_PRIVATE_KEY_SIZE * 8)..(2 * BIP32_PRIVATE_KEY_SIZE * 8) {
         derived_cc_i_bits.push(hmac_output[i]);
     }
+    tap_bits(builder, &derived_cc_i_bits);      // 256 bits I_R/cc_i (MSB)
     
     // Step 5: Convert I_L bits to NonNativeTarget for ECC scalar multiplication
     // (Same logic as generic version)
@@ -356,6 +394,10 @@ pub fn add_bip32_key_derivation_constraints_fixed<F: RichField + Extendable<D>, 
 
         builder.connect(i_l_scalar.value.limbs[limb_idx].0, limb_value);
     }
+    
+    // DEBUG: Tap i_l_scalar limbs (8x32-bit words)
+    let limb_targets: Vec<_> = i_l_scalar.value.limbs.iter().map(|l| l.0).collect();
+    tap_targets(builder, &limb_targets);
     
     // Step 6: Range checks to ensure I_L < n and I_L ≠ 0 (same as generic)
     let secp256k1_order = BigUint::from_str_radix("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16).unwrap();

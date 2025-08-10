@@ -4,6 +4,32 @@ use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::hash::poseidon::PoseidonHash;
 
+// Debug mode - set to true to expose intermediate values as public inputs
+const DEBUG_TAP: bool = true;
+
+/// Minimal debug helper functions
+fn tap_bits<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    bits: &[BoolTarget],
+) {
+    if DEBUG_TAP {
+        for b in bits {
+            builder.register_public_input(b.target);
+        }
+    }
+}
+
+fn tap_targets<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+    targets: &[Target],
+) {
+    if DEBUG_TAP {
+        for &t in targets {
+            builder.register_public_input(t);
+        }
+    }
+}
+
 /// Pack bits (LSB first in `bits`) in 63-bit LE into one Goldilocks field target.
 /// Using 63 bits to avoid field overflow (Goldilocks field modulus is 2^64 - 2^32 + 1).
 fn pack_63_le<F: RichField + Extendable<D>, const D: usize>(
@@ -65,6 +91,10 @@ pub fn add_hmac_poseidon_constraints<F: RichField + Extendable<D>, const D: usiz
     // Pack inputs into field targets (63-bit words).
     let key_words = pack_bits_to_words63(builder, key_bits_256); // 5 words (256/63 = 4.06, rounded up)
     let msg_words = pack_bits_to_words63(builder, msg_bits_296); // 5 words (296/63 = 4.69, rounded up)
+    
+    // DEBUG: Tap the 63-bit words 
+    tap_targets(builder, &key_words);           // 5 x 63-bit key words
+    tap_targets(builder, &msg_words);           // 5 x 63-bit msg words
 
     // Domain separation constants (small field scalars).
     // You can pick any distinct constants; keep them stable in generator & circuit.
@@ -82,12 +112,19 @@ pub fn add_hmac_poseidon_constraints<F: RichField + Extendable<D>, const D: usiz
     in2.extend(&key_words);
     in2.extend(&msg_words);
     let h2 = builder.hash_n_to_hash_no_pad::<PoseidonHash>(in2);
+    
+    // DEBUG: Tap Poseidon hash outputs (4+4 field elements)
+    tap_targets(builder, &h1.elements);         // H1: 4 field elements
+    tap_targets(builder, &h2.elements);         // H2: 4 field elements
 
     // Concatenate bits: H1 (4 words) || H2 (4 words) => 8 * 63 = 504 bits
     let mut all_bits = Vec::with_capacity(504);
     for w in h1.elements.into_iter().chain(h2.elements.into_iter()) {
         all_bits.extend(split_word63_le(builder, w));
     }
+    
+    // DEBUG: Tap the 504 bits from hash conversion (8x63 bits)
+    tap_bits(builder, &all_bits);
     
     // Split into I_L (256 bits) and I_R (256 bits) for BIP32 compatibility
     let mut out_bits = Vec::with_capacity(512);

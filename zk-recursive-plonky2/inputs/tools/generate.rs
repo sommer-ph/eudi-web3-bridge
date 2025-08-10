@@ -119,9 +119,16 @@ fn bytes_to_bits_le(bytes: &[u8]) -> Vec<bool> {
 /// HMAC-Poseidon implementation compatible with circuit
 /// Returns 512 bits (64 bytes) like HMAC-SHA512, with proper bit handling
 fn hmac_poseidon(key_bits_256: &[bool], msg_bits_296: &[bool]) -> Vec<u8> {
+    println!("\n=== OFF-CHAIN HMAC-POSEIDON DEBUG ===");
+    
     // Pack inputs into field elements (63-bit words to avoid field overflow)
     let key_words = pack_bits_to_words63(key_bits_256); // 5 words (256/63 = 4.06, rounded up)
     let msg_words = pack_bits_to_words63(msg_bits_296); // 5 words (296/63 = 4.69, rounded up)
+    
+    println!("Key bits (256): {} bits", key_bits_256.len());
+    println!("Msg bits (296): {} bits", msg_bits_296.len());
+    println!("Key words (5x63-bit): {:?}", key_words);
+    println!("Msg words (5x63-bit): {:?}", msg_words);
     
     // Domain separation constants (same as in circuit)
     let ds1 = GoldilocksField::from_canonical_u64(0xD501);
@@ -139,6 +146,9 @@ fn hmac_poseidon(key_bits_256: &[bool], msg_bits_296: &[bool]) -> Vec<u8> {
     // Hash with Poseidon
     let h1 = PoseidonHash::hash_no_pad(&in1);
     let h2 = PoseidonHash::hash_no_pad(&in2);
+    
+    println!("H1 elements: {:?}", h1.elements.iter().map(|f| f.0).collect::<Vec<u64>>());
+    println!("H2 elements: {:?}", h2.elements.iter().map(|f| f.0).collect::<Vec<u64>>());
     
     // Convert to bits and split like in circuit: first 256 bits for I_L, next 256 bits for I_R
     let mut all_bits = Vec::new();
@@ -182,6 +192,10 @@ fn hmac_poseidon(key_bits_256: &[bool], msg_bits_296: &[bool]) -> Vec<u8> {
         }
         result_bytes.push(byte);
     }
+    
+    println!("504 reconstructed bits: {:?}", all_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
+    println!("Final result bytes (first 8): {:02x?}", &result_bytes[0..8]);
+    println!("=== END OFF-CHAIN DEBUG ===\n");
     
     result_bytes
 }
@@ -285,6 +299,10 @@ fn main() -> Result<()> {
         
         println!("Using HMAC-Poseidon with {} key bits and {} msg bits", 
                  key_bits.len(), padded_msg_bits.len());
+        println!("Parent chain code: {:02x?}", parent_chain_code);
+        println!("HMAC input (compressed pubkey + index): {:02x?}", hmac_input);
+        println!("Key bits (LSB/byte, first 20): {:?}", key_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
+        println!("Msg bits (LSB/byte, first 20): {:?}", padded_msg_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
         
         hmac_poseidon(&key_bits, &padded_msg_bits)
     } else {

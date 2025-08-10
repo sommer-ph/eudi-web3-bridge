@@ -1,14 +1,12 @@
 //! Outer circuit proof generation command.
 
 use anyhow::Result;
-use log::Level;
-use plonky2::util::timing::TimingTree;
-use plonky2::plonk::prover::prove;
 use std::{fs, path::Path, time::Instant};
-use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
-use plonky2::field::types::{Field, PrimeField};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+
+use plonky2::plonk::circuit_data::CircuitData; 
+
 use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
 use crate::types::input::FullInput;
 use crate::utils::parsing::hex_to_bigint;
@@ -17,6 +15,17 @@ use crate::circuits::debug::DebugCircuit;
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
+
+fn print_env(tag: &str, data: &CircuitData<F, Cfg, D>) {
+    println!("--- {tag} ENV ---");
+    println!("CFG hasher    = {}", std::any::type_name::<<Cfg as GenericConfig<D>>::Hasher>());
+    println!("CFG type      = {}", std::any::type_name::<Cfg>());
+    println!("D             = {}", D);
+    println!("degree_bits   = {}", data.common.degree_bits());
+    println!("fri rate_bits = {}", data.common.config.fri_config.rate_bits);
+    println!("num_challenges= {}", data.common.config.num_challenges);
+    println!("verifier_only_digest = {:?}", data.verifier_only.circuit_digest);
+}
 
 pub fn generate_debug_proof(
     debug: &DebugCircuit,
@@ -59,15 +68,15 @@ pub fn generate_debug_proof(
     let mut pw = PartialWitness::<F>::new();
             
     // C5: BIP32 Key Derivation - Set parent public key (assuming this should be private input)
-    pw.set_biguint_target(&debug.targets.bip32_targets.pk_0.x.value, &pk_0_x)?;
-    pw.set_biguint_target(&debug.targets.bip32_targets.pk_0.y.value, &pk_0_y)?;
+    pw.set_biguint_target(&debug.targets.pk_0.x.value, &pk_0_x)?;
+    pw.set_biguint_target(&debug.targets.pk_0.y.value, &pk_0_y)?;
     
     // Set parent chain code (bits)
     let cc_0_bits: Vec<bool> = cc_0.iter()
         .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
         .collect();
     for (i, &bit) in cc_0_bits.iter().enumerate() {
-        pw.set_bool_target(debug.targets.bip32_targets.cc_0[i], bit)?;
+        pw.set_bool_target(debug.targets.cc_0[i], bit)?;
     }
     
     // Set child index bits
@@ -75,35 +84,50 @@ pub fn generate_debug_proof(
         .map(|i| (derivation_index >> i) & 1 == 1)
         .collect();
     for (i, &bit) in derivation_index_bits.iter().enumerate() {
-        pw.set_bool_target(debug.targets.bip32_targets.derivation_index[i], bit)?;
+        pw.set_bool_target(debug.targets.derivation_index[i], bit)?;
     }
     
     // Set expected child public key
-    pw.set_biguint_target(&debug.targets.bip32_targets.pk_i.x.value, &pk_i_x)?;
-    pw.set_biguint_target(&debug.targets.bip32_targets.pk_i.y.value, &pk_i_y)?;
+    pw.set_biguint_target(&debug.targets.pk_i.x.value, &pk_i_x)?;
+    pw.set_biguint_target(&debug.targets.pk_i.y.value, &pk_i_y)?;
     
     // Set expected child chain code
     let cc_i_bits: Vec<bool> = cc_i.iter()
         .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
         .collect();
     for (i, &bit) in cc_i_bits.iter().enumerate() {
-        pw.set_bool_target(debug.targets.bip32_targets.cc_i[i], bit)?;
+        pw.set_bool_target(debug.targets.cc_i[i], bit)?;
     }
     
     println!("Outer witness setup time: {:?}", witness_start.elapsed());
     
-    // Generate outer recursive proof
+    // Before proving: dump environment
+    print_env("PROVE", &debug.data);
+    
+    // Generate outer recursive proof using method-based API
     println!("Generating debug proof");
-    let mut timing = TimingTree::new("outer_recursive_proof", Level::Info);
-    let proof = prove(&debug.data.prover_only, &debug.data.common, pw, &mut timing)?;
-    println!("Debug proof timing breakdown:");
-    timing.print();
+    let proof = debug.data.prove(pw)?;
+    println!("verifier_only_digest (data) = {:?}", debug.data.verifier_only.circuit_digest);
+    println!("public_inputs_len(proof)    = {}", proof.public_inputs.len());
     println!("Debug proof size: {} bytes", proof.to_bytes().len());
+    
+    // DEBUG: Dump all public inputs for step-by-step comparison
+    println!("\n=== DEBUG: PUBLIC INPUTS DUMP ({} elements) ===", proof.public_inputs.len());
+    for (i, x) in proof.public_inputs.iter().enumerate() {
+        println!("PI[{i:04}]: {}", x.0); // Goldilocks field element as u64
+    }
+    println!("=== END PUBLIC INPUTS DUMP ===\n");
     
     // Verify outer recursive proof
     println!("Verifying debug proof...");
     let verify_start = Instant::now();
-    debug.data.verify(proof.clone())?;
+    if let Err(e) = debug.data.verify(proof.clone()) {
+        println!("Verify: ERROR -> {e}");
+        print_env("VERIFY", &debug.data);
+        return Err(e.into());
+    } else {
+        println!("Verify: OK");
+    }
     println!("Debug proof verification time: {:?}", verify_start.elapsed());
         
     // Save outer proof

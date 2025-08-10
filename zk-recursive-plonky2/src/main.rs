@@ -123,7 +123,7 @@ fn main() -> Result<()> {
             generate_outer_proof(&inner, &outer, &input, &build_dir)?;
         },
         Some(Commands::Debug { input, derive_mode }) => {
-            use zk_recursive::circuits::debug::build_debug_circuit;
+            use zk_recursive::circuits::debug::DebugCircuit;
             
             let derive_mode = match derive_mode.as_str() {
                 "sha512" => DeriveMode::Sha512,
@@ -136,10 +136,10 @@ fn main() -> Result<()> {
             
             println!("\nBuilding Debug Circuit with {:?} derive mode...", derive_mode);
             let debug_start = Instant::now();
-            let debug = build_debug_circuit(derive_mode);
+            let debug = DebugCircuit::build(derive_mode)?;
             let debug_total = debug_start.elapsed();
-            println!("Inner circuit build time: {:?}", debug_total);
-            print_circuit_stats("Inner", &debug.data.common);
+            println!("Debug circuit build time: {:?}", debug_total);
+            print_circuit_stats("Debug", &debug.data.common);
             
             println!("\n=== GENERATING DEBUG PROOF ===");
             use zk_recursive::commands::debug::generate_debug_proof;

@@ -12,58 +12,48 @@ const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
-#[allow(dead_code)]
-pub struct DebugCircuitTargets {
-    // BIP32 Key Derivation targets (C5)
-    pub bip32_targets: Bip32KeyDerivationTargets,
-}
-
-#[allow(dead_code)]
 pub struct DebugCircuit {
     pub data: CircuitData<F, Cfg, D>,
-    pub targets: DebugCircuitTargets,
-    pub derive_mode: DeriveMode,
+    pub targets: Bip32KeyDerivationTargets,
 }
 
-pub fn build_debug_circuit(
-    derive_mode: DeriveMode
-) -> DebugCircuit {
-    let config = CircuitConfig::standard_ecc_config();
-    let mut builder = CircuitBuilder::<F, D>::new(config);
+impl DebugCircuit {
+    pub fn build(derive_mode: DeriveMode) -> anyhow::Result<Self> {
+        // **Unified** ECC-Config (needed for BIP32 key derivation gates)
+        let cfg = CircuitConfig::standard_ecc_config();
+        let mut builder = CircuitBuilder::<F, D>::new(cfg);
 
-    let bip32_targets = add_bip32_key_derivation_constraints_fixed(&mut builder, derive_mode);
+        let bip32_targets = add_bip32_key_derivation_constraints_fixed(&mut builder, derive_mode);
 
-    // Pack cc_0 (256 bits) into 4 field elements
-    let cc_0_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_0, &mut builder);
-    for &target in &cc_0_packed {
-        builder.register_public_input(target);
-    }
-    
-    // Pack derivation_index (32 bits) into 1 field element  
-    let index_packed = pack_32_bits_to_field_element(&bip32_targets.derivation_index, &mut builder);
-    builder.register_public_input(index_packed);
-    
-    // Register pk_i as public input
-    for limb in bip32_targets.pk_i.x.value.limbs.iter().chain(
-        bip32_targets.pk_i.y.value.limbs.iter()
-    ) {
-        builder.register_public_input(limb.0);
-    }
-    
-    // Pack cc_i (256 bits) into 4 field elements
-    let cc_i_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_i, &mut builder);
-    for &target in &cc_i_packed {
-        builder.register_public_input(target);
-    }
+        // Pack cc_0 (256 bits) into 4 field elements
+        let cc_0_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_0, &mut builder);
+        for &target in &cc_0_packed {
+            builder.register_public_input(target);
+        }
         
-    let data = builder.build::<Cfg>();
-    let targets = DebugCircuitTargets {
-        bip32_targets,
-    };
-    
-    DebugCircuit { 
-        data, 
-        targets, 
-        derive_mode,
+        // Pack derivation_index (32 bits) into 1 field element  
+        let index_packed = pack_32_bits_to_field_element(&bip32_targets.derivation_index, &mut builder);
+        builder.register_public_input(index_packed);
+        
+        // Register pk_i as public input
+        for limb in bip32_targets.pk_i.x.value.limbs.iter().chain(
+            bip32_targets.pk_i.y.value.limbs.iter()
+        ) {
+            builder.register_public_input(limb.0);
+        }
+        
+        // Pack cc_i (256 bits) into 4 field elements
+        let cc_i_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_i, &mut builder);
+        for &target in &cc_i_packed {
+            builder.register_public_input(target);
+        }
+            
+        // Build **with** Cfg binding:
+        let data = builder.build::<Cfg>();
+        
+        Ok(Self { 
+            data, 
+            targets: bip32_targets,
+        })
     }
 }
