@@ -37,6 +37,13 @@ enum Commands {
         #[arg(long, default_value = "sha512", help = "Outer key derivation mode: sha512 or poseidon")]
         outer_derive_mode: String,
     },
+    /// Build debug
+    Debug {
+        #[arg(short, long, help = "Input JSON file with proof data")]
+        input: String,
+        #[arg(long, default_value = "poseidon", help = "Key derivation mode: Poseidon")]
+        derive_mode: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -114,6 +121,29 @@ fn main() -> Result<()> {
             println!("\n=== GENERATING RECURSIVE PROOF ===");
             use zk_recursive::commands::outer::generate_outer_proof;
             generate_outer_proof(&inner, &outer, &input, &build_dir)?;
+        },
+        Some(Commands::Debug { input, derive_mode }) => {
+            use zk_recursive::circuits::debug::build_debug_circuit;
+            
+            let derive_mode = match derive_mode.as_str() {
+                "sha512" => DeriveMode::Sha512,
+                "poseidon" => DeriveMode::Poseidon,
+                _ => {
+                    eprintln!("Invalid derive mode: {}. Use 'sha512' or 'poseidon'", derive_mode);
+                    std::process::exit(1);
+                }
+            };
+            
+            println!("\nBuilding Debug Circuit with {:?} derive mode...", derive_mode);
+            let debug_start = Instant::now();
+            let debug = build_debug_circuit(derive_mode);
+            let debug_total = debug_start.elapsed();
+            println!("Inner circuit build time: {:?}", debug_total);
+            print_circuit_stats("Inner", &debug.data.common);
+            
+            println!("\n=== GENERATING DEBUG PROOF ===");
+            use zk_recursive::commands::debug::generate_debug_proof;
+            generate_debug_proof(&debug, &input, &build_dir)?;
         },
         None => {
             println!("\nNo command specified. Available commands:");
