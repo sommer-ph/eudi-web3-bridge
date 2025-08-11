@@ -17,17 +17,18 @@ use num_traits::Num;
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use k256::{SecretKey, elliptic_curve::sec1::ToEncodedPoint};
-use plonky2::hash::poseidon::PoseidonHash;
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::config::Hasher;
 
 type HmacSha512 = Hmac<Sha512>;
 
 #[derive(Parser)]
 struct Args {
-    /// Use Poseidon for BIP32 derivation (default is SHA-512)
-    #[arg(long)]
-    poseidon: bool,
+    /// Output file path
+    #[arg(short, long, default_value = "inputs/input.json")]
+    output: PathBuf,
+    
+    /// Derivation index (non-hardened, must be < 2^31)
+    #[arg(short, long, default_value = "0")]
+    derivation_index: u32,
 }
 
 #[derive(Serialize)]
@@ -84,135 +85,15 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
     format!("0x{}", hex_str)
 }
 
-/// Pack bits (LSB first) into 63-bit words for Poseidon to avoid field overflow
-fn pack_bits_to_words63(bits: &[bool]) -> Vec<u64> {
-    let mut words = Vec::new();
-    let mut i = 0;
-    
-    while i < bits.len() {
-        let end = (i + 63).min(bits.len());
-        let mut word = 0u64;
-        
-        for (bit_idx, &bit) in bits[i..end].iter().enumerate() {
-            if bit {
-                word |= 1u64 << bit_idx;
-            }
-        }
-        words.push(word);
-        i += 63;
-    }
-    words
-}
-
-/// Convert bytes to little-endian bits
-fn bytes_to_bits_le(bytes: &[u8]) -> Vec<bool> {
-    let mut bits = Vec::new();
-    for &byte in bytes {
-        for i in 0..8 {
-            bits.push((byte >> i) & 1 == 1);
-        }
-    }
-    bits
-}
-
-
-/// HMAC-Poseidon implementation compatible with circuit
-/// Returns 512 bits (64 bytes) like HMAC-SHA512, with proper bit handling
-fn hmac_poseidon(key_bits_256: &[bool], msg_bits_296: &[bool]) -> Vec<u8> {
-    println!("\n=== OFF-CHAIN HMAC-POSEIDON DEBUG ===");
-    
-    // Pack inputs into field elements (63-bit words to avoid field overflow)
-    let key_words = pack_bits_to_words63(key_bits_256); // 5 words (256/63 = 4.06, rounded up)
-    let msg_words = pack_bits_to_words63(msg_bits_296); // 5 words (296/63 = 4.69, rounded up)
-    
-    println!("Key bits (256): {} bits", key_bits_256.len());
-    println!("Msg bits (296): {} bits", msg_bits_296.len());
-    println!("Key words (5x63-bit): {:?}", key_words);
-    println!("Msg words (5x63-bit): {:?}", msg_words);
-    
-    // Domain separation constants (same as in circuit)
-    let ds1 = GoldilocksField::from_canonical_u64(0xD501);
-    let ds2 = GoldilocksField::from_canonical_u64(0xD502);
-    
-    // Convert words to field elements
-    let mut in1 = vec![ds1];
-    in1.extend(key_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    in1.extend(msg_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    
-    let mut in2 = vec![ds2];
-    in2.extend(key_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    in2.extend(msg_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    
-    // Hash with Poseidon
-    let h1 = PoseidonHash::hash_no_pad(&in1);
-    let h2 = PoseidonHash::hash_no_pad(&in2);
-    
-    println!("H1 elements: {:?}", h1.elements.iter().map(|f| f.0).collect::<Vec<u64>>());
-    println!("H2 elements: {:?}", h2.elements.iter().map(|f| f.0).collect::<Vec<u64>>());
-    
-    // Convert to bits and split like in circuit: first 256 bits for I_L, next 256 bits for I_R
-    let mut all_bits = Vec::new();
-    
-    // Each field element contributes 63 bits (to match circuit implementation)
-    for element in h1.elements.iter().chain(h2.elements.iter()) {
-        let as_u64 = element.0;
-        // Take only 63 bits to match circuit
-        for i in 0..63 {
-            all_bits.push((as_u64 >> i) & 1 == 1);
-        }
-    }
-    
-    // We now have 8 * 63 = 504 bits, need to construct 512 bits (256 + 256)
-    let mut result_bits = vec![false; 512];
-    
-    // I_L: Take first 256 bits
-    for i in 0..256 {
-        if i < all_bits.len() {
-            result_bits[i] = all_bits[i];
-        }
-    }
-    
-    // I_R: Take next 248 bits and pad to 256 bits
-    for i in 256..512 {
-        let source_idx = i - 256;
-        if source_idx + 256 < all_bits.len() {
-            result_bits[i] = all_bits[source_idx + 256];
-        }
-        // else: already false (padding)
-    }
-    
-    // Convert bits back to bytes
-    let mut result_bytes = Vec::new();
-    for chunk in result_bits.chunks(8) {
-        let mut byte = 0u8;
-        for (i, &bit) in chunk.iter().enumerate() {
-            if bit {
-                byte |= 1u8 << i;
-            }
-        }
-        result_bytes.push(byte);
-    }
-    
-    println!("504 reconstructed bits: {:?}", all_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
-    println!("Final result bytes (first 8): {:02x?}", &result_bytes[0..8]);
-    println!("=== END OFF-CHAIN DEBUG ===\n");
-    
-    result_bytes
-}
-
 fn main() -> Result<()> {
     let args = Args::parse();
     
-    // Use SHA-512 by default, Poseidon if flag is set
-    let use_poseidon = args.poseidon;
-    let derive_mode = if use_poseidon { "Poseidon" } else { "SHA-512" };
-    
-    // Fixed values
-    let derivation_index = 0u32;
-    let output_path = PathBuf::from("inputs/input.json");
+    // Ensure derivation index is non-hardened (< 2^31)
+    if args.derivation_index >= 0x80000000 {
+        return Err(anyhow::anyhow!("Derivation index must be < 2^31 (non-hardened)"));
+    }
 
-    println!("Generating full input with derivation index: {} using {} for BIP32", 
-             derivation_index, derive_mode);
+    println!("Generating full input with derivation index: {}", args.derivation_index);
 
     // ---------- 1. EUDI P-256 Data (Inner Part) - Using Static PK ----------
     
@@ -270,7 +151,7 @@ fn main() -> Result<()> {
         .unwrap();
 
     // BIP32 Non-Hardened Key Derivation: child_pk = parent_pk + I_L * G
-    println!("Computing BIP32 derivation for index {}", derivation_index);
+    println!("Computing BIP32 derivation for index {}", args.derivation_index);
     
     // Convert parent private key for k256 computation
     let parent_key_bytes = sk_0_scalar.to_canonical_biguint().to_bytes_be();
@@ -283,34 +164,12 @@ fn main() -> Result<()> {
     
     // Create HMAC input: compressed_parent_pubkey || child_index
     let mut hmac_input = parent_pubkey_compressed.as_bytes().to_vec();
-    hmac_input.extend_from_slice(&derivation_index.to_be_bytes());
+    hmac_input.extend_from_slice(&args.derivation_index.to_be_bytes());
     
-    // Compute HMAC result using selected method
-    let hmac_result = if use_poseidon {
-        // Convert inputs to bits for Poseidon
-        let key_bits = bytes_to_bits_le(&parent_chain_code); // 256 bits
-        let msg_bits = bytes_to_bits_le(&hmac_input); // 33 bytes = 264 bits, but circuit expects 296
-        
-        // Pad message to 296 bits (37 bytes) to match circuit expectations
-        let mut padded_msg_bits = msg_bits;
-        while padded_msg_bits.len() < 296 {
-            padded_msg_bits.push(false);
-        }
-        
-        println!("Using HMAC-Poseidon with {} key bits and {} msg bits", 
-                 key_bits.len(), padded_msg_bits.len());
-        println!("Parent chain code: {:02x?}", parent_chain_code);
-        println!("HMAC input (compressed pubkey + index): {:02x?}", hmac_input);
-        println!("Key bits (LSB/byte, first 20): {:?}", key_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
-        println!("Msg bits (LSB/byte, first 20): {:?}", padded_msg_bits.iter().take(20).map(|&b| if b { 1u8 } else { 0u8 }).collect::<Vec<u8>>());
-        
-        hmac_poseidon(&key_bits, &padded_msg_bits)
-    } else {
-        // Traditional HMAC-SHA512
-        let mut hmac = HmacSha512::new_from_slice(&parent_chain_code)?;
-        hmac.update(&hmac_input);
-        hmac.finalize().into_bytes().to_vec()
-    };
+    // Compute HMAC-SHA512(parent_chain_code, compressed_parent_pubkey || child_index)
+    let mut hmac = HmacSha512::new_from_slice(&parent_chain_code)?;
+    hmac.update(&hmac_input);
+    let hmac_result = hmac.finalize().into_bytes();
     
     // Extract I_L (left 32 bytes) and child chain code (right 32 bytes)
     let il_bytes = &hmac_result[0..32];
@@ -340,7 +199,7 @@ fn main() -> Result<()> {
     
     println!("BIP32 derivation successful:");
     println!("  Parent chain code: {}", bytes_to_hex(&parent_chain_code));
-    println!("  Child index: {}", derivation_index);
+    println!("  Child index: {}", args.derivation_index);
     println!("  Child chain code: {}", bytes_to_hex(child_chain_code_bytes));
     println!("  I_L: {}", to_hex(&il_scalar));
 
@@ -371,7 +230,7 @@ fn main() -> Result<()> {
         
         // BIP32 derivation data (outer circuit)
         cc_0: bytes_to_hex(&parent_chain_code),
-        derivation_index: derivation_index,
+        derivation_index: args.derivation_index,
         pk_i: Point {
             x: to_hex_biguint(&child_public_key.x.to_canonical_biguint()),
             y: to_hex_biguint(&child_public_key.y.to_canonical_biguint()),
@@ -379,8 +238,8 @@ fn main() -> Result<()> {
         cc_i: bytes_to_hex(child_chain_code_bytes),
     };
 
-    fs::write(&output_path, serde_json::to_string_pretty(&json)?)?;
-    println!("\nUnified input JSON written to {:?}", output_path);
+    fs::write(&args.output, serde_json::to_string_pretty(&json)?)?;
+    println!("\nUnified input JSON written to {:?}", args.output);
     println!("Note: Uses static public key from sig_verify_static for ECDSA signature verification");
     Ok(())
 }

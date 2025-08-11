@@ -6,15 +6,11 @@ use p256::{
     PublicKey as P256PublicKey,
 };
 use serde::Deserialize;
-use std::{fs, path::PathBuf, env};
+use std::{fs, path::PathBuf};
 use hmac::{Hmac, Mac};
 use sha2::Sha512;
 use num_bigint::BigUint;
 use num_traits::Num;
-use plonky2::hash::poseidon::PoseidonHash;
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::types::Field;
-use plonky2::plonk::config::Hasher;
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -54,121 +50,12 @@ fn hex_to_bytes_32(s: &str) -> [u8; 32] {
     bytes.try_into().unwrap()
 }
 
-/// Pack bits (LSB first) into 63-bit words for Poseidon to avoid field overflow
-fn pack_bits_to_words63(bits: &[bool]) -> Vec<u64> {
-    let mut words = Vec::new();
-    let mut i = 0;
-    
-    while i < bits.len() {
-        let end = (i + 63).min(bits.len());
-        let mut word = 0u64;
-        
-        for (bit_idx, &bit) in bits[i..end].iter().enumerate() {
-            if bit {
-                word |= 1u64 << bit_idx;
-            }
-        }
-        words.push(word);
-        i += 63;
-    }
-    words
-}
-
-/// Convert bytes to little-endian bits
-fn bytes_to_bits_le(bytes: &[u8]) -> Vec<bool> {
-    let mut bits = Vec::new();
-    for &byte in bytes {
-        for i in 0..8 {
-            bits.push((byte >> i) & 1 == 1);
-        }
-    }
-    bits
-}
-
-
-/// HMAC-Poseidon implementation compatible with circuit
-/// Returns 512 bits (64 bytes) like HMAC-SHA512, with proper bit handling
-fn hmac_poseidon(key_bits_256: &[bool], msg_bits_296: &[bool]) -> Vec<u8> {
-    // Pack inputs into field elements (63-bit words to avoid field overflow)
-    let key_words = pack_bits_to_words63(key_bits_256); // 5 words (256/63 = 4.06, rounded up)
-    let msg_words = pack_bits_to_words63(msg_bits_296); // 5 words (296/63 = 4.69, rounded up)
-    
-    // Domain separation constants (same as in circuit)
-    let ds1 = GoldilocksField::from_canonical_u64(0xD501);
-    let ds2 = GoldilocksField::from_canonical_u64(0xD502);
-    
-    // Convert words to field elements
-    let mut in1 = vec![ds1];
-    in1.extend(key_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    in1.extend(msg_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    
-    let mut in2 = vec![ds2];
-    in2.extend(key_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    in2.extend(msg_words.iter().map(|&w| GoldilocksField::from_canonical_u64(w)));
-    
-    // Hash with Poseidon
-    let h1 = PoseidonHash::hash_no_pad(&in1);
-    let h2 = PoseidonHash::hash_no_pad(&in2);
-    
-    // Convert to bits and split like in circuit: first 256 bits for I_L, next 256 bits for I_R
-    let mut all_bits = Vec::new();
-    
-    // Each field element contributes 63 bits (to match circuit implementation)
-    for element in h1.elements.iter().chain(h2.elements.iter()) {
-        let as_u64 = element.0;
-        // Take only 63 bits to match circuit
-        for i in 0..63 {
-            all_bits.push((as_u64 >> i) & 1 == 1);
-        }
-    }
-    
-    // We now have 8 * 63 = 504 bits, need to construct 512 bits (256 + 256)
-    let mut result_bits = vec![false; 512];
-    
-    // I_L: Take first 256 bits
-    for i in 0..256 {
-        if i < all_bits.len() {
-            result_bits[i] = all_bits[i];
-        }
-    }
-    
-    // I_R: Take next 248 bits and pad to 256 bits
-    for i in 256..512 {
-        let source_idx = i - 256;
-        if source_idx + 256 < all_bits.len() {
-            result_bits[i] = all_bits[source_idx + 256];
-        }
-        // else: already false (padding)
-    }
-    
-    // Convert bits back to bytes
-    let mut result_bytes = Vec::new();
-    for chunk in result_bits.chunks(8) {
-        let mut byte = 0u8;
-        for (i, &bit) in chunk.iter().enumerate() {
-            if bit {
-                byte |= 1u8 << i;
-            }
-        }
-        result_bytes.push(byte);
-    }
-    
-    result_bytes
-}
-
 fn main() -> Result<()> {
     let json: Input = serde_json::from_slice(
         &fs::read(PathBuf::from("inputs/input.json"))?
     )?;
 
-    // Check if --poseidon flag was used (default is SHA-512)
-    let args: Vec<String> = env::args().collect();
-    let use_poseidon = args.contains(&"--poseidon".to_string());
-    
-    let derive_mode = if use_poseidon { "Poseidon" } else { "SHA-512" };
-
     println!("=== CHECKING UNIFIED INPUT DATA ===");
-    println!("Using {} for BIP32 derivation verification", derive_mode);
 
     // ---------- 1. Check P-256 EUDI Signature (Inner Part) - Static PK Verification ----------
     println!("\n1. Verifying P-256 EUDI signature with static public key...");
@@ -252,28 +139,10 @@ fn main() -> Result<()> {
     let mut hmac_input = parent_pubkey_compressed.as_bytes().to_vec();
     hmac_input.extend_from_slice(&json.derivation_index.to_be_bytes());
     
-    // Compute HMAC result using detected method
-    let hmac_result = if use_poseidon {
-        // Convert inputs to bits for Poseidon
-        let key_bits = bytes_to_bits_le(&parent_chain_code); // 256 bits
-        let msg_bits = bytes_to_bits_le(&hmac_input); // 33 bytes = 264 bits, but circuit expects 296
-        
-        // Pad message to 296 bits (37 bytes) to match circuit expectations
-        let mut padded_msg_bits = msg_bits;
-        while padded_msg_bits.len() < 296 {
-            padded_msg_bits.push(false);
-        }
-        
-        println!("Verifying with HMAC-Poseidon: {} key bits, {} msg bits", 
-                 key_bits.len(), padded_msg_bits.len());
-        
-        hmac_poseidon(&key_bits, &padded_msg_bits)
-    } else {
-        // Traditional HMAC-SHA512
-        let mut hmac = HmacSha512::new_from_slice(&parent_chain_code)?;
-        hmac.update(&hmac_input);
-        hmac.finalize().into_bytes().to_vec()
-    };
+    // Compute HMAC-SHA512(parent_chain_code, compressed_parent_pubkey || child_index)
+    let mut hmac = HmacSha512::new_from_slice(&parent_chain_code)?;
+    hmac.update(&hmac_input);
+    let hmac_result = hmac.finalize().into_bytes();
     
     // Extract I_L (left 32 bytes) and computed child chain code (right 32 bytes)
     let il_bytes = &hmac_result[0..32];

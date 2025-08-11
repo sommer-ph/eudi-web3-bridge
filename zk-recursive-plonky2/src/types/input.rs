@@ -18,12 +18,6 @@ pub enum SignatureMode {
     Dynamic,  // pk_issuer is dynamic
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum DeriveMode {
-    Sha512,   // Use HMAC-SHA512 for BIP32 key derivation
-    Poseidon, // Use HMAC-Poseidon for BIP32-like key derivation
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircuitConfig {
     pub signature_mode: SignatureMode,
