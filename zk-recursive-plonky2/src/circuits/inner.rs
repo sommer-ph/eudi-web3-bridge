@@ -14,6 +14,9 @@ use plonky2_ecdsa::gadgets::ecdsa::{
 };
 use plonky2_ecdsa::gadgets::nonnative::CircuitBuilderNonNative;
 use plonky2_ecdsa::add_static_pk_ecdsa_verify_constraints;
+use num_bigint::BigUint;
+use num_traits::Num;
+use plonky2::field::types::Field;
 
 use crate::types::input::SignatureMode;
 
@@ -21,16 +24,20 @@ const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
+// Fixed issuer public key values
+const STATIC_PK_ISSUER_X: &str = "66432692286261411630769223098970693805397596870633670159153355502222145619968";
+const STATIC_PK_ISSUER_Y: &str = "63182586149833488067701290985084360701345487374231728189741684364091950142361";
+
 /// Targets for the inner circuit.
-/// Contains fields for all components C1-C4 with optional pk_issuer for signature mode selection.
+/// Contains fields for all components C1-C4 with pk_issuer always present.
 #[allow(dead_code)]
 pub struct InnerCircuitTargets {
     // C1+C2: EUDI Key Derivation (P256)
     pub pk_c: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
     pub sk_c: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<P256Scalar>,
     
-    // C3: Signature Verification (P256) - pk_issuer only for Dynamic mode
-    pub pk_issuer: Option<plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>>,
+    // C3: Signature Verification (P256) - pk_issuer always present, validated in static mode
+    pub pk_issuer: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
     pub msg: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<P256Scalar>,
     pub sig: ECDSASignatureTarget<P256>,
     
@@ -63,17 +70,11 @@ pub fn build_inner_circuit(signature_mode: SignatureMode) -> InnerCircuit {
         builder.register_public_input(limb.0);
     }
 
-    // Conditional public input: issuer public key (only for Dynamic signature mode)
-    let pk_issuer = match signature_mode {
-        SignatureMode::Dynamic => {
-            let pk_issuer = builder.add_virtual_affine_point_target::<P256>();
-            for limb in pk_issuer.x.value.limbs.iter().chain(pk_issuer.y.value.limbs.iter()) {
-                builder.register_public_input(limb.0);
-            }
-            Some(pk_issuer)
-        }
-        SignatureMode::Static => None,
-    };
+    // Public input: issuer public key (always present, validated in static mode)
+    let pk_issuer = builder.add_virtual_affine_point_target::<P256>();
+    for limb in pk_issuer.x.value.limbs.iter().chain(pk_issuer.y.value.limbs.iter()) {
+        builder.register_public_input(limb.0);
+    }
 
     // Private inputs for P256 operations
     let msg = builder.add_virtual_nonnative_target::<P256Scalar>();
@@ -103,13 +104,26 @@ pub fn build_inner_circuit(signature_mode: SignatureMode) -> InnerCircuit {
     // Verify that the credential was validly signed by a trusted issuer
     match signature_mode {
         SignatureMode::Dynamic => {
-            // Dynamic mode: pk_issuer is provided as public input
-            let pk_target = ECDSAPublicKeyTarget(pk_issuer.as_ref().unwrap().clone());
+            // Dynamic mode: pk_issuer from public input is used directly
+            let pk_target = ECDSAPublicKeyTarget(pk_issuer.clone());
             verify_p256_message_circuit(&mut builder, msg.clone(), signature.clone(), pk_target);
         }
         SignatureMode::Static => {
-            // Static mode: uses hardcoded issuer public key with lookup table optimization
+            // Static mode: use hardcoded issuer public key with lookup table optimization
             add_static_pk_ecdsa_verify_constraints(&mut builder, msg.clone(), signature.clone());
+            
+            // Additionally validate that pk_issuer matches the fixed static values
+            let expected_x = BigUint::from_str_radix(STATIC_PK_ISSUER_X, 10).unwrap();
+            let expected_y = BigUint::from_str_radix(STATIC_PK_ISSUER_Y, 10).unwrap();
+            
+            // Add constraints to ensure pk_issuer matches expected values  
+            // Use the p256_base field for the coordinates
+            use plonky2_ecdsa::field::p256_base::P256Base;
+            let expected_x_target = builder.constant_nonnative(P256Base::from_noncanonical_biguint(expected_x));
+            let expected_y_target = builder.constant_nonnative(P256Base::from_noncanonical_biguint(expected_y));
+            
+            builder.connect_nonnative(&pk_issuer.x, &expected_x_target);
+            builder.connect_nonnative(&pk_issuer.y, &expected_y_target);
         }
     }
 

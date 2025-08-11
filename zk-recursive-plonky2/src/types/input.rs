@@ -29,8 +29,8 @@ pub struct FullInput {
     pub pk_c: Point,
     pub sk_c: String,
     
-    // C3: Signature Verification (P256)
-    pub pk_issuer: Option<Point>,  // None when SignatureMode::Static
+    // C3: Signature Verification (P256)  
+    pub pk_issuer: Point,  // Always present, validated against static values in Static mode
     pub msg: String,
     pub signature: Signature,
     

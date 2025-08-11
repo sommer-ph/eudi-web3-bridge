@@ -11,7 +11,7 @@ use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
 use crate::types::input::{FullInput, SignatureMode};
-use crate::utils::parsing::hex_to_bigint;
+use crate::utils::parsing::{hex_to_bigint, hex_to_fixed_be_bytes, set_bytes_as_bits_be, set_u32_be_bits_non_hardened};
 use crate::circuits::outer::OuterCircuit;
 use crate::circuits::inner::InnerCircuit;
 use crate::commands::inner::generate_inner_proof;
@@ -60,11 +60,7 @@ pub fn generate_outer_proof(
     let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
     
     // Parse parent chain code
-    let cc_0_hex = hex_to_bigint(&input.cc_0);
-    let mut cc_0 = [0u8; 32];
-    let cc_0_bytes = cc_0_hex.to_bytes_be();
-    let len = cc_0_bytes.len().min(32);
-    cc_0[32-len..].copy_from_slice(&cc_0_bytes[..len]);
+    let cc_0 = hex_to_fixed_be_bytes::<32>(&input.cc_0);
     
     // Parse derivation index
     let derivation_index = input.derivation_index;
@@ -73,11 +69,7 @@ pub fn generate_outer_proof(
     let pk_i_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.x));
     let pk_i_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_i.y));
     
-    let cc_i_hex = hex_to_bigint(&input.cc_i);
-    let mut cc_i = [0u8; 32];
-    let cc_i_bytes = cc_i_hex.to_bytes_be();
-    let cc_len = cc_i_bytes.len().min(32);
-    cc_i[32-cc_len..].copy_from_slice(&cc_i_bytes[..cc_len]);
+    let cc_i = hex_to_fixed_be_bytes::<32>(&input.cc_i);
     
     // ===== SET UP CIRCUIT WITNESSES =====
     
@@ -91,33 +83,30 @@ pub fn generate_outer_proof(
     pw.set_biguint_target(&outer.targets.bip32_targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
     pw.set_biguint_target(&outer.targets.bip32_targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
     
-    // Set parent chain code (bits)
-    let cc_0_bits: Vec<bool> = cc_0.iter()
-        .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
-        .collect();
-    for (i, &bit) in cc_0_bits.iter().enumerate() {
-        pw.set_bool_target(outer.targets.bip32_targets.cc_0[i], bit)?;
-    }
+    // Set parent chain code (256 bits)
+    set_bytes_as_bits_be(
+        &mut pw,
+        &outer.targets.bip32_targets.cc_0,
+        &cc_0,
+    )?;
     
-    // Set child index bits
-    let derivation_index_bits: Vec<bool> = (0..32).rev()
-        .map(|i| (derivation_index >> i) & 1 == 1)
-        .collect();
-    for (i, &bit) in derivation_index_bits.iter().enumerate() {
-        pw.set_bool_target(outer.targets.bip32_targets.derivation_index[i], bit)?;
-    }
+    // Set child index (32 bits, non-hardened enforced)
+    set_u32_be_bits_non_hardened(
+        &mut pw,
+        &outer.targets.bip32_targets.derivation_index,
+        derivation_index,
+    )?;
     
     // Set expected child public key
     pw.set_biguint_target(&outer.targets.bip32_targets.pk_i.x.value, &pk_i_x.to_canonical_biguint())?;
     pw.set_biguint_target(&outer.targets.bip32_targets.pk_i.y.value, &pk_i_y.to_canonical_biguint())?;
     
-    // Set expected child chain code
-    let cc_i_bits: Vec<bool> = cc_i.iter()
-        .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
-        .collect();
-    for (i, &bit) in cc_i_bits.iter().enumerate() {
-        pw.set_bool_target(outer.targets.bip32_targets.cc_i[i], bit)?;
-    }
+    // Set expected child chain code (256 bits)
+    set_bytes_as_bits_be(
+        &mut pw,
+        &outer.targets.bip32_targets.cc_i,
+        &cc_i,
+    )?;
     
     println!("Outer witness setup time: {:?}", witness_start.elapsed());
     

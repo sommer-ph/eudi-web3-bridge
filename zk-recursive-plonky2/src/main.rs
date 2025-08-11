@@ -18,7 +18,7 @@ struct Args {
     output_dir: String,
 }
 
-/// Simplified command structure with only 2 main commands
+/// Command structure with inner, outer, and multi-step commands
 #[derive(Parser)]
 enum Commands {
     /// Build inner circuit (C1-C4) and generate proof
@@ -34,6 +34,13 @@ enum Commands {
         input: String,
         #[arg(long, default_value = "dynamic", help = "Inner signature verification mode: static or dynamic")]
         inner_sig_mode: String,
+    },
+    /// Generate multi-step recursive proof (C1_2 -> C3 -> C4 -> C5)
+    MultiStep {
+        #[arg(short, long, help = "Input JSON file with proof data")]
+        input: String,
+        #[arg(long, default_value = "dynamic", help = "Signature verification mode: static or dynamic")]
+        sig_mode: String,
     },
 }
 
@@ -104,12 +111,41 @@ fn main() -> Result<()> {
             use zk_recursive::commands::outer::generate_outer_proof;
             generate_outer_proof(&inner, &outer, &input, &build_dir)?;
         },
+        Some(Commands::MultiStep { input, sig_mode }) => {
+            use zk_recursive::commands::multi_step_recursion::{build_multi_step_circuits, generate_multi_step_recursive_proof};
+            
+            let signature_mode = match sig_mode.as_str() {
+                "static" => SignatureMode::Static,
+                "dynamic" => SignatureMode::Dynamic,
+                _ => {
+                    eprintln!("Invalid signature mode: {}. Use 'static' or 'dynamic'", sig_mode);
+                    std::process::exit(1);
+                }
+            };
+            
+            println!("\nBuilding Multi-Step Recursive Circuits with {} signature verification...", sig_mode);
+            let circuits_start = Instant::now();
+            let circuits = build_multi_step_circuits(signature_mode);
+            let circuits_total = circuits_start.elapsed();
+            println!("Multi-step circuits build time: {:?}", circuits_total);
+            
+            // Print circuit stats for each step
+            print_circuit_stats("C1_2", &circuits.c1_2.data.common);
+            print_circuit_stats("C3", &circuits.c3.data.common);
+            print_circuit_stats("C4", &circuits.c4.data.common);
+            print_circuit_stats("C5", &circuits.c5.data.common);
+            
+            println!("\n=== GENERATING MULTI-STEP RECURSIVE PROOF ===");
+            generate_multi_step_recursive_proof(&circuits, &input, &build_dir)?;
+        },
         None => {
             println!("\nNo command specified. Available commands:");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode dynamic");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode static");
             println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic");
             println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static");
+            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode dynamic");
+            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode static");
         }
     }
     

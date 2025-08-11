@@ -64,16 +64,12 @@ pub fn generate_inner_proof(
     set_nonnative_target(&mut pw, &inner.targets.sig.r, sig_r)?;
     set_nonnative_target(&mut pw, &inner.targets.sig.s, sig_s)?;
     
-    // For Dynamic mode, set pk_issuer from input. For Static mode, pk_issuer is hardcoded in circuit
-    if let SignatureMode::Dynamic = inner.signature_mode {
-        if let Some(pk_issuer_target) = &inner.targets.pk_issuer {
-            let pk_issuer = input.pk_issuer.as_ref().expect("pk_issuer must be provided for Dynamic mode");
-            let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&pk_issuer.x));
-            let pk_issuer_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&pk_issuer.y));
-            pw.set_biguint_target(&pk_issuer_target.x.value, &pk_issuer_x.to_canonical_biguint())?;
-            pw.set_biguint_target(&pk_issuer_target.y.value, &pk_issuer_y.to_canonical_biguint())?;
-        }
-    }
+    // C3: Set pk_issuer (always present now, validated in static mode)
+    let pk_issuer = &input.pk_issuer;
+    let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&pk_issuer.x));
+    let pk_issuer_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&pk_issuer.y));
+    pw.set_biguint_target(&inner.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&inner.targets.pk_issuer.y.value, &pk_issuer_y.to_canonical_biguint())?;
     
     // C4: Secp256k1 Key Derivation witness data
     pw.set_biguint_target(&inner.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
