@@ -13,6 +13,7 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -83,6 +84,36 @@ public class BlockchainKeyManagementService {
         BigInteger x = key.getPubKeyPoint().getXCoord().toBigInteger();
         BigInteger y = key.getPubKeyPoint().getYCoord().toBigInteger();
         return LimbUtils.pointToLimbsK1(x, y);
+    }
+
+    public String[] getChainCodeLimbs(DeterministicKey key) {
+        log.info("Get chain code limbs");
+        BigInteger chainCode = new BigInteger(1, key.getChainCode());
+        return LimbUtils.scalarToLimbsK1(chainCode);
+    }
+
+    // Direct hex methods for recursive proof preparation
+
+    public String getSecretKeyHex(DeterministicKey key) {
+        log.info("Get secret key hex");
+        BigInteger sk = new BigInteger(1, key.getPrivKeyBytes());
+        return "0x" + String.format("%064x", sk);
+    }
+
+    public String getChainCodeHex(DeterministicKey key) {
+        log.info("Get chain code hex");
+        BigInteger chainCode = new BigInteger(1, key.getChainCode());
+        return "0x" + String.format("%064x", chainCode);
+    }
+
+    public Map<String, String> getPublicKeyHex(DeterministicKey key) {
+        log.info("Get public key hex");
+        BigInteger x = key.getPubKeyPoint().getXCoord().toBigInteger();
+        BigInteger y = key.getPubKeyPoint().getYCoord().toBigInteger();
+        return Map.of(
+                "x", "0x" + String.format("%064x", x),
+                "y", "0x" + String.format("%064x", y)
+        );
     }
 
 }

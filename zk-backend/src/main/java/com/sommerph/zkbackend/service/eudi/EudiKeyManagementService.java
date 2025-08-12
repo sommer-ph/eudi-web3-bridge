@@ -171,4 +171,66 @@ public class EudiKeyManagementService {
         }
     }
 
+    // Direct hex methods for recursive proof preparation
+    
+    public String getCredentialMsgHashHex(Map<String, Object> header, Map<String, Object> payload) {
+        log.info("Get credential message hash hex");
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            String encodedHeader = SignatureUtils.base64url(mapper.writeValueAsBytes(header));
+            String encodedPayload = SignatureUtils.base64url(mapper.writeValueAsBytes(payload));
+            String signingInput = encodedHeader + "." + encodedPayload;
+            byte[] hash = SignatureUtils.hash(signingInput);
+            BigInteger hashInt = new BigInteger(1, hash);
+            return "0x" + hashInt.toString(16);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute credential message hash hex", e);
+        }
+    }
+
+    public Map<String, String> extractCredentialSignatureHex(byte[] derSignature) {
+        log.info("Extract credential signature hex from DER format");
+        try {
+            SignatureUtils.EcdsaSignature sig = SignatureUtils.decodeDerSignature(derSignature);
+            return Map.of(
+                    "r", "0x" + sig.getR().toString(16),
+                    "s", "0x" + sig.getS().toString(16)
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract ECDSA signature hex", e);
+        }
+    }
+
+    public Map<String, String> getCredentialBindingKeyJwkHex(Map<String, Object> jwk) {
+        log.info("Get credential binding key JWK hex");
+        BigInteger x = new BigInteger(1, Base64.getUrlDecoder().decode((String) jwk.get("x")));
+        BigInteger y = new BigInteger(1, Base64.getUrlDecoder().decode((String) jwk.get("y")));
+        return Map.of(
+                "x", "0x" + x.toString(16),
+                "y", "0x" + y.toString(16)
+        );
+    }
+
+    public Map<String, String> getIssuerPublicKeyHex() {
+        log.info("Get issuer public key hex");
+        BigInteger x = ((ECPublicKey) issuerKeyPair.getPublic()).getW().getAffineX();
+        BigInteger y = ((ECPublicKey) issuerKeyPair.getPublic()).getW().getAffineY();
+        return Map.of(
+                "x", "0x" + x.toString(16),
+                "y", "0x" + y.toString(16)
+        );
+    }
+
+    public String getUserCredentialSecretKeyHex(String base64EncodedSecretKey) {
+        log.info("Get user credential secret key hex");
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(base64EncodedSecretKey);
+            PrivateKey privateKey = KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
+            BigInteger s = ((java.security.interfaces.ECPrivateKey) privateKey).getS();
+            return "0x" + s.toString(16);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get user credential secret key hex", e);
+        }
+    }
+
 }

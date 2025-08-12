@@ -1,0 +1,13 @@
+{
+  "userId" : "karl",
+  "mnemonic" : "comfort tragic pupil sport flock bomb genuine season neutral safe mystery pelican",
+  "base64MasterPublicKey" : "A6g6S6WV51ft9Ez4MgEWXDjySFqvh2W7dcpjZUqkjV1f",
+  "base64MasterSecretKey" : "mLoh+OD3AswCh+rIi1rVTN9QALiq0KmRKMGP6oSJue8=",
+  "base64MasterChainCode" : "U2j326VQ5R7hPzA4kivOeqkhKF2AOOvt8CS2heTOdKM=",
+  "childKeys" : [ {
+    "publicKeyBase64" : "A5DCp2vKpMYZKpBEgg5cLXgjP8B/1GWyxe2yJDDKnFn1",
+    "secretKeyBase64" : "ahKBSn60RXh2Sf/fjePNt9qGtN9OvV4ZXbmMXZSVZsg=",
+    "chainCodeBase64" : "na81pY8VM/eouY6edTl40oHuLqxAntZDXdLT1WFfcWw=",
+    "derivationIndex" : 0
+  } ]
+}

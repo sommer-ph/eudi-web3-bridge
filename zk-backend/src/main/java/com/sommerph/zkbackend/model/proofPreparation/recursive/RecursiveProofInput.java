@@ -4,30 +4,37 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class InnerProofInput {
-    private String userId;
-    private String msg;
-    private PublicKeyPoint pk_cred;
-    private PublicKeyPoint pk_i;
-    private Signature signature;
-    private String sk_c;
+@Data
+public class RecursiveProofInput {
 
-    @Data
     @AllArgsConstructor
     @NoArgsConstructor
+    @Data
     public static class PublicKeyPoint {
         private String x;
         private String y;
     }
 
-    @Data
     @AllArgsConstructor
     @NoArgsConstructor
+    @Data
     public static class Signature {
         private String r;
         private String s;
     }
+
+    private PublicKeyPoint pk_issuer;
+    private String msg;
+    private Signature signature;
+    private PublicKeyPoint pk_c;
+    private String sk_c;
+    private String sk_0;
+    private PublicKeyPoint pk_0;
+    private String cc_0;
+    private int derivation_index;
+    private PublicKeyPoint pk_i;
+    private String cc_i;
+
 }

@@ -10,5 +10,6 @@ import lombok.NoArgsConstructor;
 public class ChildKey {
     private String publicKeyBase64;
     private String secretKeyBase64;
+    private String chainCodeBase64;
     private int derivationIndex;
 }

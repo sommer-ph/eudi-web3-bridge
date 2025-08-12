@@ -153,72 +153,87 @@ public class ProofPreparationService {
         }
     }
 
-    public void prepareRecursiveProofs(String userId) {
-        log.info("Prepare all recursive proof data for user: {}", userId);
-        prepareInnerProof(userId);
-        prepareOuterProof(userId);
-    }
-
-    // Recursive inner proof
-    public void prepareInnerProof(String userId) {
-        log.info("Prepare inner proof data for recursive proof for user: {}", userId);
+    // Recursive proof input with all EUDI attributes
+    public void prepareRecursiveProofInput(String userId, int derivationIndex) {
+        log.info("Prepare recursive proof input data for user: {} with derivation index: {}", userId, derivationIndex);
         try {
-            EudiWallet wallet = eudiWalletService.loadWallet(userId);
-            EudiCredential credential = wallet.getCredentials().get(0);
+            // EUDI wallet and credential data
+            EudiWallet eudiWallet = eudiWalletService.loadWallet(userId);
+            EudiCredential credential = eudiWallet.getCredentials().get(0);
 
-            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
+            // Blockchain wallet data
+            BlockchainWallet blockchainWallet = blockchainWalletService.loadWallet(userId);
+            DeterministicKey masterKey = blockchainKeyManagementService.deriveMasterKey(blockchainWallet.getMnemonic());
+            DeterministicKey childKey = blockchainKeyManagementService.deriveChildKey(blockchainWallet.getMnemonic(), derivationIndex);
+
+            // Extract issuer public key (pk_issuer)
+            Map<String, String> pkIssuerHex = eudiKeyManagementService.getIssuerPublicKeyHex();
+            RecursiveProofInput.PublicKeyPoint pkIssuer = new RecursiveProofInput.PublicKeyPoint(
+                    pkIssuerHex.get("x"),
+                    pkIssuerHex.get("y")
+            );
+
+            // Extract message hash (msg)
+            String msg = eudiKeyManagementService.getCredentialMsgHashHex(
                     credential.getHeader(),
                     credential.getPayload()
             );
-            String msg = "0x" + String.join("", msgHashLimbs);
 
+            // Extract signature
+            Map<String, String> signatureHex = eudiKeyManagementService.extractCredentialSignatureHex(
+                    java.util.Base64.getUrlDecoder().decode(credential.getSignature())
+            );
+            RecursiveProofInput.Signature signature = new RecursiveProofInput.Signature(
+                    signatureHex.get("r"),
+                    signatureHex.get("s")
+            );
+
+            // Extract credential public key (pk_c)
             Object cnfObj = credential.getPayload().get("cnf");
             Map<String, Object> cnfMap = (Map<String, Object>) cnfObj;
             Map<String, Object> jwkMap = (Map<String, Object>) cnfMap.get("jwk");
-            String[][] pkCredLimbs = eudiKeyManagementService.getCredentialBindingKeyJwkLimbs(jwkMap);
-
-            String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
-
-            Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
-                    java.util.Base64.getUrlDecoder().decode(credential.getSignature())
+            Map<String, String> pkCredHex = eudiKeyManagementService.getCredentialBindingKeyJwkHex(jwkMap);
+            RecursiveProofInput.PublicKeyPoint pkC = new RecursiveProofInput.PublicKeyPoint(
+                    pkCredHex.get("x"),
+                    pkCredHex.get("y")
             );
 
-            String[] skCredLimbs = eudiKeyManagementService.getUserCredentialSecretKeyLimbs(wallet.getBase64SecretKey());
+            // Extract credential secret key (sk_c)
+            String skC = eudiKeyManagementService.getUserCredentialSecretKeyHex(eudiWallet.getBase64SecretKey());
 
-            InnerProofInput innerInput = new InnerProofInput(
-                    userId,
-                    msg,
-                    new InnerProofInput.PublicKeyPoint("0x" + String.join("", pkCredLimbs[0]), "0x" + String.join("", pkCredLimbs[1])),
-                    new InnerProofInput.PublicKeyPoint("0x" + String.join("", pkILimbs[0]), "0x" + String.join("", pkILimbs[1])),
-                    new InnerProofInput.Signature("0x" + String.join("", sigLimbs.get("r")), "0x" + String.join("", sigLimbs.get("s"))),
-                    "0x" + String.join("", skCredLimbs)
+            // Extract master secret key (sk_0)
+            String sk0 = blockchainKeyManagementService.getSecretKeyHex(masterKey);
+
+            // Extract master public key (pk_0)
+            Map<String, String> pkMasterHex = blockchainKeyManagementService.getPublicKeyHex(masterKey);
+            RecursiveProofInput.PublicKeyPoint pk0 = new RecursiveProofInput.PublicKeyPoint(
+                    pkMasterHex.get("x"),
+                    pkMasterHex.get("y")
             );
 
-            exportUtils.writeInnerProofToFile(innerInput, userId);
+            // Extract master chain code (cc_0)
+            String cc0 = blockchainKeyManagementService.getChainCodeHex(masterKey);
+
+            // Extract child public key (pk_i)
+            Map<String, String> pkChildHex = blockchainKeyManagementService.getPublicKeyHex(childKey);
+            RecursiveProofInput.PublicKeyPoint pkI = new RecursiveProofInput.PublicKeyPoint(
+                    pkChildHex.get("x"),
+                    pkChildHex.get("y")
+            );
+
+            // Extract child chain code (cc_i)
+            String ccI = blockchainKeyManagementService.getChainCodeHex(childKey);
+
+            // Create recursive proof input
+            RecursiveProofInput recursiveInput = new RecursiveProofInput(
+                    pkIssuer, msg, signature, pkC, skC, sk0, pk0, cc0, derivationIndex, pkI, ccI
+            );
+
+            // Export to file
+            exportUtils.writeRecursiveProofToFile(recursiveInput, userId);
+
         } catch (Exception e) {
-            throw new RuntimeException("Error preparing inner proof data for user: " + userId, e);
-        }
-    }
-
-    // Recursive outer proof
-    public void prepareOuterProof(String userId) {
-        log.info("Prepare outer proof data for recursive proof for user: {}", userId);
-        try {
-            BlockchainWallet wallet = blockchainWalletService.loadWallet(userId);
-            DeterministicKey key = blockchainKeyManagementService.deriveChildKey(wallet.getMnemonic(), 0);
-            
-            String[] skLimbs = blockchainKeyManagementService.getSecretKeyLimbs(key);
-            String[][] pkLimbs = blockchainKeyManagementService.getPublicKeyLimbs(key);
-
-            OuterProofInput outerInput = new OuterProofInput(
-                    userId,
-                    "0x" + String.join("", skLimbs),
-                    new OuterProofInput.PublicKeyPoint("0x" + String.join("", pkLimbs[0]), "0x" + String.join("", pkLimbs[1]))
-            );
-
-            exportUtils.writeOuterProofToFile(outerInput, userId);
-        } catch (Exception e) {
-            throw new RuntimeException("Error preparing outer proof data for user: " + userId, e);
+            throw new RuntimeException("Error preparing recursive proof input data for user: " + userId, e);
         }
     }
 

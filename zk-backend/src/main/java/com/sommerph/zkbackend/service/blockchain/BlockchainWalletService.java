@@ -31,6 +31,7 @@ public class BlockchainWalletService {
                     mnemonic,
                     keyManagementService.encode(masterKey.getPubKey()),
                     keyManagementService.encode(masterKey.getPrivKeyBytes()),
+                    keyManagementService.encode(masterKey.getChainCode()),
                     new ArrayList<>()
             );
             walletRegistry.save(wallet);
@@ -61,6 +62,7 @@ public class BlockchainWalletService {
                     mnemonic,
                     keyManagementService.encode(masterKey.getPubKey()),
                     keyManagementService.encode(masterKey.getPrivKeyBytes()),
+                    keyManagementService.encode(masterKey.getChainCode()),
                     new ArrayList<>()
             );
             walletRegistry.save(wallet);
@@ -78,7 +80,8 @@ public class BlockchainWalletService {
             DeterministicKey childKey = keyManagementService.deriveChildKey(wallet.getMnemonic(), index);
             String publicKeyBase64 = keyManagementService.encode(childKey.getPubKey());
             String secretKeyBase64 = keyManagementService.encode(childKey.getPrivKeyBytes());
-            ChildKey result = new ChildKey(publicKeyBase64, secretKeyBase64, index);
+            String chainCodeBase64 = keyManagementService.encode(childKey.getChainCode());
+            ChildKey result = new ChildKey(publicKeyBase64, secretKeyBase64, chainCodeBase64, index);
             wallet.getChildKeys().add(result);
             walletRegistry.save(wallet);
             return result;

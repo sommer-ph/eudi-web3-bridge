@@ -18,6 +18,7 @@ public class BlockchainWallet {
 
     private String base64MasterPublicKey;
     private String base64MasterSecretKey;
+    private String base64MasterChainCode;
 
     private List<ChildKey> childKeys = new ArrayList<>();
 

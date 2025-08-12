@@ -88,55 +88,66 @@ public class ExportUtils {
         return Arrays.stream(input).map(this::toStringArray).toArray(String[][]::new);
     }
 
-    public void writeInnerProofToFile(InnerProofInput innerProof, String userId) {
+
+    public void writeRecursiveProofToFile(RecursiveProofInput recursiveProof, String userId) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             mapper.enable(SerializationFeature.INDENT_OUTPUT);
             
             Map<String, Object> json = new LinkedHashMap<>();
-            json.put("msg", innerProof.getMsg());
             
-            Map<String, Object> pkCred = new LinkedHashMap<>();
-            pkCred.put("x", innerProof.getPk_cred().getX());
-            pkCred.put("y", innerProof.getPk_cred().getY());
-            json.put("pk_cred", pkCred);
+            // pk_issuer
+            Map<String, Object> pkIssuer = new LinkedHashMap<>();
+            pkIssuer.put("x", recursiveProof.getPk_issuer().getX());
+            pkIssuer.put("y", recursiveProof.getPk_issuer().getY());
+            json.put("pk_issuer", pkIssuer);
             
-            Map<String, Object> pkI = new LinkedHashMap<>();
-            pkI.put("x", innerProof.getPk_i().getX());
-            pkI.put("y", innerProof.getPk_i().getY());
-            json.put("pk_i", pkI);
+            // msg
+            json.put("msg", recursiveProof.getMsg());
             
+            // signature
             Map<String, Object> signature = new LinkedHashMap<>();
-            signature.put("r", innerProof.getSignature().getR());
-            signature.put("s", innerProof.getSignature().getS());
+            signature.put("r", recursiveProof.getSignature().getR());
+            signature.put("s", recursiveProof.getSignature().getS());
             json.put("signature", signature);
             
-            json.put("sk_c", innerProof.getSk_c());
+            // pk_c
+            Map<String, Object> pkC = new LinkedHashMap<>();
+            pkC.put("x", recursiveProof.getPk_c().getX());
+            pkC.put("y", recursiveProof.getPk_c().getY());
+            json.put("pk_c", pkC);
             
-            String path = properties.getStorage().getPath() + "/" + userId + "_inner_proof.json";
-            mapper.writeValue(new File(path), json);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to write inner proof export file", e);
-        }
-    }
-
-    public void writeOuterProofToFile(OuterProofInput outerProof, String userId) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            // sk_c
+            json.put("sk_c", recursiveProof.getSk_c());
             
-            Map<String, Object> json = new LinkedHashMap<>();
-            json.put("sk0", outerProof.getSk0());
+            // sk_0
+            json.put("sk_0", recursiveProof.getSk_0());
             
+            // pk_0
             Map<String, Object> pk0 = new LinkedHashMap<>();
-            pk0.put("x", outerProof.getPk0().getX());
-            pk0.put("y", outerProof.getPk0().getY());
-            json.put("pk0", pk0);
+            pk0.put("x", recursiveProof.getPk_0().getX());
+            pk0.put("y", recursiveProof.getPk_0().getY());
+            json.put("pk_0", pk0);
             
-            String path = properties.getStorage().getPath() + "/" + userId + "_outer_proof.json";
+            // cc_0
+            json.put("cc_0", recursiveProof.getCc_0());
+            
+            // derivation_index
+            json.put("derivation_index", recursiveProof.getDerivation_index());
+            
+            // pk_i
+            Map<String, Object> pkI = new LinkedHashMap<>();
+            pkI.put("x", recursiveProof.getPk_i().getX());
+            pkI.put("y", recursiveProof.getPk_i().getY());
+            json.put("pk_i", pkI);
+            
+            // cc_i
+            json.put("cc_i", recursiveProof.getCc_i());
+            
+            String path = properties.getStorage().getPath() + "/" + userId + "_recursive.json";
             mapper.writeValue(new File(path), json);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to write outer proof export file", e);
+            throw new RuntimeException("Failed to write recursive proof export file", e);
         }
     }
 
