@@ -29,7 +29,9 @@ pub struct C1_2Circuit {
 /// C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
 /// C2: pk_c === pk_c_calc - Public key equality check (pk_c extracted from EUDI credential)
 pub fn build_c1_2_circuit() -> C1_2Circuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // Public input: EUDI public key (pk_c)

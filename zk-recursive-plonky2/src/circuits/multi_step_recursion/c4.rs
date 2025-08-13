@@ -33,7 +33,9 @@ pub struct C4Circuit {
 /// - Recursive verification of C3 proof
 /// - C4: pk_0 = KeyDer(sk_0) - Blockchain wallet key derivation over secp256k1
 pub fn build_c4_circuit(c3_common: &CommonCircuitData<F, D>) -> C4Circuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // === Recursive Proof Verification ===

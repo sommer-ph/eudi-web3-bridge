@@ -287,8 +287,8 @@ fn generate_c5_proof(
     pw.set_verifier_data_target(&circuit.targets.c4_vd, &c4_circuit.data.verifier_only)?;
     
     // Set parent public key
-    pw.set_biguint_target(&circuit.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&circuit.targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
+    //pw.set_biguint_target(&circuit.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
+    //pw.set_biguint_target(&circuit.targets.pk_0.y.value, &pk_0_y.to_canonical_biguint())?;
     
     // Set BIP32 targets
     pw.set_biguint_target(&circuit.targets.bip32_targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;

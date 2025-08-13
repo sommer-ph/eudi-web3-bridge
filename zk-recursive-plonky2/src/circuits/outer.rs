@@ -1,6 +1,8 @@
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+use plonky2_ecdsa::curve::secp256k1::Secp256K1;
+use plonky2_ecdsa::gadgets::curve::CircuitBuilderCurve;
 
 use crate::utils::key_derivation::{
     add_bip32_key_derivation_constraints, add_bip32_key_derivation_constraints_fixed, Bip32KeyDerivationTargets
@@ -19,7 +21,7 @@ pub struct OuterCircuitTargets {
     pub proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
     
-    // BIP32 Key Derivation targets (C5)
+    // BIP32 Key Derivation targets
     pub bip32_targets: Bip32KeyDerivationTargets,
 }
 
@@ -56,7 +58,9 @@ pub fn build_outer_circuit_with_optimization(
     inner_signature_mode: SignatureMode,
     use_fixed_hmac: bool,
 ) -> OuterCircuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
     
     // === Recursive Proof Verification ===
@@ -64,6 +68,36 @@ pub fn build_outer_circuit_with_optimization(
     let proof = builder.add_virtual_proof_with_pis(inner_common);
     let vd = builder.add_virtual_verifier_data(inner_common.config.fri_config.cap_height);
     builder.verify_proof::<Cfg>(&proof, &vd, inner_common);
+
+    // === pk_0 Consistency Check ===
+    // Ensure the same pk_0 is used in both outer and inner circuits
+    // This prevents malicious users from using different keys
+    
+    // Add pk_0 as private input to outer circuit
+    let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
+    
+    // Extract pk_0 from inner circuit's public inputs (first 8 field elements)
+    // Inner circuit registers pk_0 as: x_limbs (4) + y_limbs (4) = 8 field elements total
+    let inner_pk_0_x_limbs = [
+        proof.public_inputs[0],
+        proof.public_inputs[1], 
+        proof.public_inputs[2],
+        proof.public_inputs[3],
+    ];
+    let inner_pk_0_y_limbs = [
+        proof.public_inputs[4],
+        proof.public_inputs[5],
+        proof.public_inputs[6], 
+        proof.public_inputs[7],
+    ];
+    
+    // Connect outer private pk_0 with inner public pk_0
+    for (outer_limb, &inner_limb) in pk_0.x.value.limbs.iter().zip(inner_pk_0_x_limbs.iter()) {
+        builder.connect(outer_limb.0, inner_limb);
+    }
+    for (outer_limb, &inner_limb) in pk_0.y.value.limbs.iter().zip(inner_pk_0_y_limbs.iter()) {
+        builder.connect(outer_limb.0, inner_limb);
+    }
 
     // === C5: BIP32 Non-Hardened Key Derivation ===
     // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)

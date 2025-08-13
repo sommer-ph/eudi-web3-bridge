@@ -61,7 +61,9 @@ pub struct InnerCircuit {
 /// C3: SigVerify(pk_I, msg, sig) - Credential signature verification over P256 (static/dynamic)
 /// C4: pk_0 = KeyDer(sk_0) - Blockchain wallet key derivation over secp256k1
 pub fn build_inner_circuit(signature_mode: SignatureMode) -> InnerCircuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // Public input: secp256k1 blockchain wallet public key (pk_0)

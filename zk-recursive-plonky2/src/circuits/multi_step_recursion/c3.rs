@@ -53,7 +53,9 @@ pub fn build_c3_circuit(
     c1_2_common: &CommonCircuitData<F, D>,
     signature_mode: SignatureMode,
 ) -> C3Circuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // === Recursive Proof Verification ===

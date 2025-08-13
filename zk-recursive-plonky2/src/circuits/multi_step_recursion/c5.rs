@@ -20,8 +20,6 @@ pub struct C5CircuitTargets {
     pub c4_proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub c4_vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
     
-    // Private input: parent public key (pk_0)
-    pub pk_0: plonky2_ecdsa::gadgets::curve::AffinePointTarget<Secp256K1>,
     // BIP32 Key Derivation targets
     pub bip32_targets: Bip32KeyDerivationTargets,
 }
@@ -39,7 +37,9 @@ pub fn build_c5_circuit(
     c4_common: &CommonCircuitData<F, D>,
     use_fixed_hmac: bool,
 ) -> C5Circuit {
-    let config = CircuitConfig::standard_ecc_config();
+    let mut config = CircuitConfig::standard_ecc_config();
+    config.zero_knowledge = true; 
+    println!("Zero-knowledge active? {}", config.zero_knowledge);
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // === Recursive Proof Verification ===
@@ -48,8 +48,35 @@ pub fn build_c5_circuit(
     let c4_vd = builder.add_virtual_verifier_data(c4_common.config.fri_config.cap_height);
     builder.verify_proof::<Cfg>(&c4_proof, &c4_vd, c4_common);
 
-    // === Private Input: Parent Public Key (pk_0) ===
+    // === pk_0 Consistency Check ===
+    // Ensure the same pk_0 is used in both outer and inner circuits
+    // This prevents malicious users from using different keys
+    
+    // Add pk_0 as private input to outer circuit
     let pk_0 = builder.add_virtual_affine_point_target::<Secp256K1>();
+    
+    // Extract pk_0 from inner circuit's public inputs (first 8 field elements)
+    // Inner circuit registers pk_0 as: x_limbs (4) + y_limbs (4) = 8 field elements total
+    let c4_pk_0_x_limbs = [
+        c4_proof.public_inputs[0],
+        c4_proof.public_inputs[1], 
+        c4_proof.public_inputs[2],
+        c4_proof.public_inputs[3],
+    ];
+    let c4_pk_0_y_limbs = [
+        c4_proof.public_inputs[4],
+        c4_proof.public_inputs[5],
+        c4_proof.public_inputs[6], 
+        c4_proof.public_inputs[7],
+    ];
+    
+    // Connect outer private pk_0 with inner public pk_0
+    for (c5_limb, &c4_limb) in pk_0.x.value.limbs.iter().zip(c4_pk_0_x_limbs.iter()) {
+        builder.connect(c5_limb.0, c4_limb);
+    }
+    for (c5_limb, &c4_limb) in pk_0.y.value.limbs.iter().zip(c4_pk_0_y_limbs.iter()) {
+        builder.connect(c5_limb.0, c4_limb);
+    }
 
     // === C5: BIP32 Non-Hardened Key Derivation ===
     // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)
@@ -60,9 +87,6 @@ pub fn build_c5_circuit(
         println!("Using generic HMAC-SHA512 for BIP32 derivation...");
         add_bip32_key_derivation_constraints(&mut builder)
     };
-
-    // Connect the private pk_0 input to the BIP32 derivation targets
-    builder.connect_affine_point(&pk_0, &bip32_targets.pk_0);
 
     // === Public Inputs Registration (Optimized with Bit Packing) ===
     println!("Optimizing public inputs: Packing bits into field elements...");
@@ -94,7 +118,6 @@ pub fn build_c5_circuit(
     let targets = C5CircuitTargets {
         c4_proof,
         c4_vd,
-        pk_0,
         bip32_targets,
     };
 
