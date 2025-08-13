@@ -1,3 +1,12 @@
+//! HMAC-SHA512 implementations for zero-knowledge circuits.
+//!
+//! This module provides two HMAC-SHA512 implementations:
+//! - Generic HMAC-SHA512 for arbitrary message and key sizes
+//! - Optimized fixed-shape HMAC-SHA512 for BIP32 (32-byte key, 37-byte message)
+//!
+//! The fixed-shape variant eliminates dynamic padding and conditional logic,
+//! significantly reducing circuit complexity for BIP32 use cases.
+
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::BoolTarget;
@@ -9,6 +18,8 @@ const HMAC_OUTPUT_SIZE: usize = 512; // SHA-512 output size in bits
 const IPAD: u8 = 0x36;
 const OPAD: u8 = 0x5C;
 
+/// Circuit targets for HMAC-SHA512 constraints.
+/// Contains boolean target vectors for key, message, and output.
 pub struct HmacSha512Targets {
     pub key: Vec<BoolTarget>,
     pub message: Vec<BoolTarget>,

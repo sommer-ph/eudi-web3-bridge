@@ -1,3 +1,5 @@
+//! Packing utilities
+
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::{BoolTarget, Target};
@@ -18,7 +20,7 @@ pub fn pack_bool_targets_to_field_elements<F: RichField + Extendable<D>>(
         .collect()
 }
 
-/// Pack a Vec<BoolTarget> (256 bits) into 8 field elements.
+/// Pack a `Vec<BoolTarget>` (256 bits) into 8 field elements.
 pub fn pack_256_bits_to_field_elements<F: RichField + Extendable<D>>(
     bits: &Vec<BoolTarget>,
     builder: &mut CircuitBuilder<F, D>,
@@ -32,7 +34,7 @@ pub fn pack_256_bits_to_field_elements<F: RichField + Extendable<D>>(
         .collect()
 }
 
-/// Pack a Vec<BoolTarget> (32 bits) into 1 field element.
+/// Pack a `Vec<BoolTarget>` (32 bits) into 1 field element.
 pub fn pack_32_bits_to_field_element<F: RichField + Extendable<D>>(
     bits: &Vec<BoolTarget>,
     builder: &mut CircuitBuilder<F, D>,

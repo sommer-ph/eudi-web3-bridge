@@ -90,13 +90,26 @@ pub fn generate_inner_proof(
     inner.data.verify(proof.clone())?;
     println!("Inner proof verification time: {:?}", verify_start.elapsed());
     
-    // Save inner proof
-    println!("Serializing and saving inner proof...");
+    // Save inner proof, verifier data, and common data
+    println!("Serializing and saving inner proof artifacts...");
     let save_start = Instant::now();
+    
+    // Save proof
     let proof_data = bincode::serialize(&proof)?;
     fs::write(build_dir.join("inner_proof.bin"), &proof_data)?;
-    println!("Inner proof serialization + save time: {:?}", save_start.elapsed());
     println!("Inner proof saved: {} bytes", proof_data.len());
+    
+    // Save verifier data
+    let verifier_data = bincode::serialize(&inner.data.verifier_only)?;
+    fs::write(build_dir.join("inner_verifier.bin"), &verifier_data)?;
+    println!("Inner verifier data saved: {} bytes", verifier_data.len());
+    
+    // Save common circuit data
+    let common_data = bincode::serialize(&inner.data.common)?;
+    fs::write(build_dir.join("inner_common.bin"), &common_data)?;
+    println!("Inner common data saved: {} bytes", common_data.len());
+    
+    println!("Inner proof serialization + save time: {:?}", save_start.elapsed());
     
     let inner_total = start.elapsed();
     println!("Inner circuit total time: {:?}", inner_total);

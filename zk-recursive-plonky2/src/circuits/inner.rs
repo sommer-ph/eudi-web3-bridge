@@ -1,3 +1,11 @@
+//! Inner circuit implementation for the unified EUDI-Web3 proof system.
+//!
+//! This module implements the inner circuit (C1-C4) that proves:
+//! - C1: EUDI wallet key derivation over P-256
+//! - C2: Credential public key equality check
+//! - C3: EUDI credential signature verification (static/dynamic issuer)
+//! - C4: Blockchain wallet key derivation over secp256k1
+
 use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
@@ -54,12 +62,11 @@ pub struct InnerCircuit {
     pub signature_mode: SignatureMode,
 }
 
-/// Build the inner circuit proving correctness of all EUDI components.
-/// This circuit always implements:
-/// C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
-/// C2: pk_c === pk_c_calc - Public key equality check  
-/// C3: SigVerify(pk_I, msg, sig) - Credential signature verification over P256 (static/dynamic)
-/// C4: pk_0 = KeyDer(sk_0) - Blockchain wallet key derivation over secp256k1
+/// Build the inner circuit.
+/// - C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
+/// - C2: pk_c === pk_c_calc - Public key equality check  
+/// - C3: SigVerify(pk_I, msg, sig) - Credential signature verification over P256 (static/dynamic)
+/// - C4: pk_0 = KeyDer(sk_0) - Blockchain wallet key derivation over secp256k1
 pub fn build_inner_circuit(signature_mode: SignatureMode) -> InnerCircuit {
     let mut config = CircuitConfig::standard_ecc_config();
     config.zero_knowledge = true; 

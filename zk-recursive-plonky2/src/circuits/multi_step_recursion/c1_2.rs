@@ -26,8 +26,8 @@ pub struct C1_2Circuit {
 }
 
 /// Build the C1_2 circuit implementing:
-/// C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
-/// C2: pk_c === pk_c_calc - Public key equality check (pk_c extracted from EUDI credential)
+/// - C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
+/// - C2: pk_c === pk_c_calc - Public key equality check (pk_c extracted from EUDI credential)
 pub fn build_c1_2_circuit() -> C1_2Circuit {
     let mut config = CircuitConfig::standard_ecc_config();
     config.zero_knowledge = true; 

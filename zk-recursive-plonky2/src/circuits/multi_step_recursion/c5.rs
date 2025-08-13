@@ -6,28 +6,37 @@ use plonky2_ecdsa::curve::secp256k1::Secp256K1;
 use plonky2_ecdsa::gadgets::curve::CircuitBuilderCurve;
 
 use crate::utils::key_derivation::{
-    add_bip32_key_derivation_constraints, add_bip32_key_derivation_constraints_fixed, Bip32KeyDerivationTargets
+    add_bip32_key_derivation_constraints_fixed, Bip32KeyDerivationTargets,
+    add_poseidon_key_derivation_constraints, PoseidonKeyDerivationTargets,
 };
+use crate::types::input::DerivationMode;
 use crate::utils::bit_packing::{pack_256_bits_to_field_elements, pack_32_bits_to_field_element};
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
-/// Targets for the C5 circuit (BIP32 Key Derivation + C4 recursive verification).
+/// Key derivation targets (mode-dependent)
+pub enum C5KeyDerivationTargets {
+    Bip32(Bip32KeyDerivationTargets),
+    Poseidon(PoseidonKeyDerivationTargets),
+}
+
+/// Targets for the C5 circuit (Key Derivation + C4 recursive verification).
 pub struct C5CircuitTargets {
     // Recursive verification targets
     pub c4_proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub c4_vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
     
-    // BIP32 Key Derivation targets
-    pub bip32_targets: Bip32KeyDerivationTargets,
+    // Key Derivation targets (mode-dependent)
+    pub key_derivation_targets: C5KeyDerivationTargets,
 }
 
 /// C5 circuit that implements C5 (BIP32 Key Derivation) + recursive verification of C4.
 pub struct C5Circuit {
     pub data: CircuitData<F, Cfg, D>,
     pub targets: C5CircuitTargets,
+    pub derivation_mode: DerivationMode,
 }
 
 /// Build the C5 circuit implementing:
@@ -35,7 +44,7 @@ pub struct C5Circuit {
 /// - C5: BIP32 non-hardened key derivation: pk_i = KeyDer(pk_0, cc_0, i)
 pub fn build_c5_circuit(
     c4_common: &CommonCircuitData<F, D>,
-    use_fixed_hmac: bool,
+    derivation_mode: DerivationMode,
 ) -> C5Circuit {
     let mut config = CircuitConfig::standard_ecc_config();
     config.zero_knowledge = true; 
@@ -78,55 +87,82 @@ pub fn build_c5_circuit(
         builder.connect(c5_limb.0, c4_limb);
     }
 
-    // === C5: BIP32 Non-Hardened Key Derivation ===
-    // Implement BIP32 key derivation: pk_i = KeyDer(pk_0, cc_0, i)
-    let bip32_targets = if use_fixed_hmac {
-        println!("Using optimized fixed-shape HMAC-SHA512 for BIP32 derivation...");
-        add_bip32_key_derivation_constraints_fixed(&mut builder)
-    } else {
-        println!("Using generic HMAC-SHA512 for BIP32 derivation...");
-        add_bip32_key_derivation_constraints(&mut builder)
+    // === C5: Key Derivation ===
+    // Implement key derivation: pk_i = KeyDer(pk_0, cc_0, i)
+    let key_derivation_targets = match derivation_mode {
+        DerivationMode::Sha512 => {
+            println!("Using optimized fixed-shape HMAC-SHA512 for BIP32 derivation...");
+            let targets = add_bip32_key_derivation_constraints_fixed(&mut builder);
+            
+            // === SHA512-specific Public Inputs Registration (Bit Packing) ===
+            println!("SHA512 mode: Packing bits into field elements for public inputs...");
+            
+            // Pack cc_0 (256 bits) into 8 field elements
+            let cc_0_packed = pack_256_bits_to_field_elements(&targets.cc_0, &mut builder);
+            for &target in &cc_0_packed {
+                builder.register_public_input(target);
+            }
+            
+            // Pack derivation_index (32 bits) into 1 field element  
+            let index_packed = pack_32_bits_to_field_element(&targets.derivation_index, &mut builder);
+            builder.register_public_input(index_packed);
+            
+            // Register pk_i as public input
+            for limb in targets.pk_i.x.value.limbs.iter().chain(
+                targets.pk_i.y.value.limbs.iter()
+            ) {
+                builder.register_public_input(limb.0);
+            }
+            
+            // Pack cc_i (256 bits) into 8 field elements
+            let cc_i_packed = pack_256_bits_to_field_elements(&targets.cc_i, &mut builder);
+            for &target in &cc_i_packed {
+                builder.register_public_input(target);
+            }
+            
+            C5KeyDerivationTargets::Bip32(targets)
+        }
+        DerivationMode::Poseidon => {
+            println!("Poseidon mode: Using field-native key derivation...");
+            let targets = add_poseidon_key_derivation_constraints(&mut builder);
+            
+            // === Poseidon-specific Public Inputs Registration (Field-Native) ===
+            println!("Poseidon mode: Field-native public inputs...");
+            
+            // cc_0 is already field elements (8×u32 limbs)
+            for &cc_limb in targets.cc_0.iter() {
+                builder.register_public_input(cc_limb);
+            }
+            
+            // derivation_index is already a field element
+            builder.register_public_input(targets.derivation_index);
+            
+            // Register pk_i as public input (8×u32 limbs for x and y)
+            for limb in targets.pk_i.x.value.limbs.iter().chain(
+                targets.pk_i.y.value.limbs.iter()
+            ) {
+                builder.register_public_input(limb.0);
+            }
+            
+            // Note: No cc_i for Poseidon mode (no chain code output)
+            
+            C5KeyDerivationTargets::Poseidon(targets)
+        }
     };
-
-    // === Public Inputs Registration (Optimized with Bit Packing) ===
-    println!("Optimizing public inputs: Packing bits into field elements...");
-    
-    // Pack cc_0 (256 bits) into 4 field elements
-    let cc_0_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_0, &mut builder);
-    for &target in &cc_0_packed {
-        builder.register_public_input(target);
-    }
-    
-    // Pack derivation_index (32 bits) into 1 field element  
-    let index_packed = pack_32_bits_to_field_element(&bip32_targets.derivation_index, &mut builder);
-    builder.register_public_input(index_packed);
-    
-    // Register pk_i as public input
-    for limb in bip32_targets.pk_i.x.value.limbs.iter().chain(
-        bip32_targets.pk_i.y.value.limbs.iter()
-    ) {
-        builder.register_public_input(limb.0);
-    }
-    
-    // Pack cc_i (256 bits) into 4 field elements
-    let cc_i_packed = pack_256_bits_to_field_elements(&bip32_targets.cc_i, &mut builder);
-    for &target in &cc_i_packed {
-        builder.register_public_input(target);
-    }
 
     let data = builder.build::<Cfg>();
     let targets = C5CircuitTargets {
         c4_proof,
         c4_vd,
-        bip32_targets,
+        key_derivation_targets,
     };
 
-    C5Circuit { data, targets }
+    C5Circuit { data, targets, derivation_mode }
 }
 
-/// Build the C5 circuit with fixed-shape HMAC optimization (recommended).
-pub fn build_c5_circuit_optimized(c4_common: &CommonCircuitData<F, D>) -> C5Circuit {
-    build_c5_circuit(c4_common, true)
+/// Build the C5 circuit with the specified derivation mode.
+pub fn build_c5_circuit_optimized(c4_common: &CommonCircuitData<F, D>, derivation_mode: DerivationMode) -> C5Circuit {
+    build_c5_circuit(c4_common, derivation_mode)
 }
 
 #[cfg(test)]
@@ -138,22 +174,42 @@ mod tests {
     use crate::types::input::SignatureMode;
     
     #[test]
-    fn test_build_c5_circuit_with_static_chain() {
+    fn test_build_c5_circuit_with_static_chain_sha512() {
         let c1_2_circuit = build_c1_2_circuit();
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common);
-        println!("C5 circuit (static chain) built successfully");
+        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
+        println!("C5 circuit (static chain, SHA512) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
     
     #[test]
-    fn test_build_c5_circuit_with_dynamic_chain() {
+    fn test_build_c5_circuit_with_static_chain_poseidon() {
+        let c1_2_circuit = build_c1_2_circuit();
+        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
+        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
+        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
+        println!("C5 circuit (static chain, Poseidon) built successfully");
+        println!("Circuit size: {} gates", c5_circuit.data.common.degree());
+    }
+    
+    #[test]
+    fn test_build_c5_circuit_with_dynamic_chain_sha512() {
         let c1_2_circuit = build_c1_2_circuit();
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common);
-        println!("C5 circuit (dynamic chain) built successfully");
+        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
+        println!("C5 circuit (dynamic chain, SHA512) built successfully");
+        println!("Circuit size: {} gates", c5_circuit.data.common.degree());
+    }
+    
+    #[test]
+    fn test_build_c5_circuit_with_dynamic_chain_poseidon() {
+        let c1_2_circuit = build_c1_2_circuit();
+        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
+        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
+        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
+        println!("C5 circuit (dynamic chain, Poseidon) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
 }

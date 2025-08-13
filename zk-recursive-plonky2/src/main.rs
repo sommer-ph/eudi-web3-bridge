@@ -4,7 +4,7 @@ use anyhow::Result;
 use env_logger::Env;
 
 use zk_recursive::utils::circuit_stats::print_circuit_stats;
-use zk_recursive::types::input::SignatureMode;
+use zk_recursive::types::input::{SignatureMode, DerivationMode};
 
 /// Command-line arguments for the zk-recursive proof generator
 #[derive(Parser)]
@@ -34,6 +34,8 @@ enum Commands {
         input: String,
         #[arg(long, default_value = "dynamic", help = "Inner signature verification mode: static or dynamic")]
         inner_sig_mode: String,
+        #[arg(long, default_value = "sha512", help = "Outer derivation mode: sha512 or poseidon")]
+        outer_derive_mode: String,
     },
     /// Generate multi-step recursive proof (C1_2 -> C3 -> C4 -> C5)
     MultiStep {
@@ -41,6 +43,8 @@ enum Commands {
         input: String,
         #[arg(long, default_value = "dynamic", help = "Signature verification mode: static or dynamic")]
         sig_mode: String,
+        #[arg(long, default_value = "sha512", help = "Derivation mode for C5: sha512 or poseidon")]
+        der_mode: String,
     },
 }
 
@@ -82,7 +86,7 @@ fn main() -> Result<()> {
             use zk_recursive::commands::inner::generate_inner_proof;
             generate_inner_proof(&inner, &input, &build_dir)?;
         },
-        Some(Commands::Outer { input, inner_sig_mode }) => {
+        Some(Commands::Outer { input, inner_sig_mode, outer_derive_mode }) => {
             use zk_recursive::circuits::{inner::build_inner_circuit, outer::build_outer_circuit};
             
             let signature_mode = match inner_sig_mode.as_str() {
@@ -94,7 +98,16 @@ fn main() -> Result<()> {
                 }
             };
             
-            println!("\nBuilding Recursive Circuits with {} inner signature verification...", inner_sig_mode);
+            let derivation_mode = match outer_derive_mode.as_str() {
+                "sha512" => DerivationMode::Sha512,
+                "poseidon" => DerivationMode::Poseidon,
+                _ => {
+                    eprintln!("Invalid outer derivation mode: {}. Use 'sha512' or 'poseidon'", outer_derive_mode);
+                    std::process::exit(1);
+                }
+            };
+            
+            println!("\nBuilding Recursive Circuits with {} inner signature verification and {} derivation mode...", inner_sig_mode, outer_derive_mode);
             let inner_start = Instant::now();
             let inner = build_inner_circuit(signature_mode.clone());
             let inner_total = inner_start.elapsed();
@@ -102,7 +115,7 @@ fn main() -> Result<()> {
             print_circuit_stats("Inner", &inner.data.common);
             
             let outer_start = Instant::now();
-            let outer = build_outer_circuit(&inner.data.common, signature_mode);
+            let outer = build_outer_circuit(&inner.data.common, signature_mode, derivation_mode);
             let outer_total = outer_start.elapsed();
             println!("Outer circuit build time: {:?}", outer_total);
             print_circuit_stats("Outer", &outer.data.common);
@@ -111,7 +124,7 @@ fn main() -> Result<()> {
             use zk_recursive::commands::outer::generate_outer_proof;
             generate_outer_proof(&inner, &outer, &input, &build_dir)?;
         },
-        Some(Commands::MultiStep { input, sig_mode }) => {
+        Some(Commands::MultiStep { input, sig_mode, der_mode }) => {
             use zk_recursive::commands::multi_step_recursion::{build_multi_step_circuits, generate_multi_step_recursive_proof};
             
             let signature_mode = match sig_mode.as_str() {
@@ -123,9 +136,18 @@ fn main() -> Result<()> {
                 }
             };
             
-            println!("\nBuilding Multi-Step Recursive Circuits with {} signature verification...", sig_mode);
+            let derivation_mode = match der_mode.as_str() {
+                "sha512" => DerivationMode::Sha512,
+                "poseidon" => DerivationMode::Poseidon,
+                _ => {
+                    eprintln!("Invalid derivation mode: {}. Use 'sha512' or 'poseidon'", der_mode);
+                    std::process::exit(1);
+                }
+            };
+            
+            println!("\nBuilding Multi-Step Recursive Circuits with {} signature verification and {} derivation mode...", sig_mode, der_mode);
             let circuits_start = Instant::now();
-            let circuits = build_multi_step_circuits(signature_mode);
+            let circuits = build_multi_step_circuits(signature_mode, derivation_mode);
             let circuits_total = circuits_start.elapsed();
             println!("Multi-step circuits build time: {:?}", circuits_total);
             
@@ -142,10 +164,10 @@ fn main() -> Result<()> {
             println!("\nNo command specified. Available commands:");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode dynamic");
             println!("  cargo run --release --bin zk-recursive -- inner --input inputs/input.json --sig-mode static");
-            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic");
-            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static");
-            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode dynamic");
-            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode static");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode dynamic --outer-derive-mode sha512");
+            println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static --outer-derive-mode poseidon");
+            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode dynamic --der-mode sha512");
+            println!("  cargo run --release --bin zk-recursive -- multi-step --input inputs/input.json --sig-mode static --der-mode poseidon");
         }
     }
     
