@@ -1,11 +1,13 @@
 {
   "userId" : "philipp",
-  "mnemonic" : "very anxiety best century term nasty tenant render year song across hazard",
-  "base64MasterPublicKey" : "AoFxThI+WAZYKqVEOkw50Th1pXFrqDSzGi2Gcb8STqc4",
-  "base64MasterSecretKey" : "P9aNWgpVcwLatCDx//0xTPc+5mJBx+Jv2DG1YKftjY0=",
+  "mnemonic" : "mom ketchup panel entire attack have patch wave gown truth boil giant",
+  "base64MasterPublicKey" : "A1qm0Wm9HeK8BzEvod3XcqV5XYEEfQ4NR+bsVhJUxpx1",
+  "base64MasterSecretKey" : "gTXLxX7zBFPXteIAT1/nIZ2CrBDa9PWwP4KTol8VkxM=",
+  "base64MasterChainCode" : "0tfRInk5+HzFs03E3D2lpUI2uuBHaaMWUrvZ9VTF+PI=",
   "childKeys" : [ {
-    "publicKeyBase64" : "As0J3zwkUL4crO/65tXWbxpA3hYEiXfNDs2PVfYAWndY",
-    "secretKeyBase64" : "PXh1DZiEuiVr0T/qp+d7gTJUzLc/3XlNDIDHCIQMq5E=",
-    "derivationIndex" : 1
+    "publicKeyBase64" : "ArQTbGmSTexBCmNf0V2Vlv2O0rFOUjEelluPWKNQQKBf",
+    "secretKeyBase64" : "cP/9TsH2A+Bhei1T3H37oWPbzE+Ru4NEKjSmhRxRIUc=",
+    "chainCodeBase64" : "Jw13U2UORKV4TZFTeNSZRmdRHZHrqzpFdUzUDWNIaP8=",
+    "derivationIndex" : 0
   } ]
 }

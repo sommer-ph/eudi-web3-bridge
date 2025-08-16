@@ -15,6 +15,10 @@ path = "src/main.rs"
 name = "generate"
 path = "inputs/tools/generate.rs"
 
+[[bin]]
+name = "generate_poseidon"
+path = "inputs/tools/generate_poseidon.rs"
+
 [dependencies]
 plonky2 = { git = "https://github.com/sommer-ph/plonky2", package = "plonky2", features = ["timing"] }
 plonky2_ecdsa = { git = "https://github.com/sommer-ph/plonky2-ecdsa", package = "plonky2_ecdsa", features = ["static-issuer"] }
