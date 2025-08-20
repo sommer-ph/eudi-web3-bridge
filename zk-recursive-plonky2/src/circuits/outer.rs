@@ -9,6 +9,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2_ecdsa::curve::secp256k1::Secp256K1;
+use plonky2_ecdsa::curve::p256::P256;
 use plonky2_ecdsa::gadgets::curve::CircuitBuilderCurve;
 
 use crate::utils::key_derivation::{
@@ -35,6 +36,9 @@ pub struct OuterCircuitTargets {
     // Recursive verification targets
     pub proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
+    
+    // pk_issuer consistency check target
+    pub pk_issuer: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
     
     // Key Derivation targets (mode-dependent)
     pub key_derivation_targets: KeyDerivationTargets,
@@ -109,6 +113,27 @@ pub fn build_outer_circuit_with_optimization(
         builder.connect(outer_limb.0, inner_limb);
     }
 
+    // === pk_issuer Consistency ===
+    // Register inner proof's pk_issuer directly as outer circuit public inputs
+    
+    // Extract pk_issuer from inner circuit's public inputs (positions 8-15)
+    let inner_pk_issuer_x_limbs = [
+        proof.public_inputs[8], proof.public_inputs[9], 
+        proof.public_inputs[10], proof.public_inputs[11],
+    ];
+    let inner_pk_issuer_y_limbs = [
+        proof.public_inputs[12], proof.public_inputs[13],
+        proof.public_inputs[14], proof.public_inputs[15],
+    ];
+    
+    // Register inner proof's pk_issuer as outer public inputs (pass-through)
+    for &limb in inner_pk_issuer_x_limbs.iter().chain(inner_pk_issuer_y_limbs.iter()) {
+        builder.register_public_input(limb);
+    }
+    
+    // Create pk_issuer target for witness setting (not constrained)
+    let pk_issuer = builder.add_virtual_affine_point_target::<P256>();
+
     // === C5: Key Derivation ===
     // Implement key derivation: pk_i = KeyDer(pk_0, cc_0, i)
     let key_derivation_targets = match derivation_mode {
@@ -174,6 +199,7 @@ pub fn build_outer_circuit_with_optimization(
     let targets = OuterCircuitTargets {
         proof,
         vd,
+        pk_issuer,
         key_derivation_targets,
     };
     

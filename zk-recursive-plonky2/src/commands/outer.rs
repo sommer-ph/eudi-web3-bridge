@@ -7,6 +7,7 @@ use plonky2::plonk::prover::prove;
 use std::{fs, path::Path, time::Instant};
 use plonky2::field::secp256k1_scalar::Secp256K1Scalar;
 use plonky2::field::types::{Field, PrimeField};
+use plonky2_ecdsa::field::p256_scalar::P256Scalar;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
@@ -75,6 +76,10 @@ pub fn generate_outer_proof(
     let pk_0_x = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.x));
     let pk_0_y = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_0.y));
     
+    // Parse pk_issuer for consistency check
+    let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.x));
+    let pk_issuer_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_issuer.y));
+    
     // Parse parent chain code
     let cc_0 = hex_to_fixed_be_bytes::<32>(&input.cc_0);
     
@@ -97,6 +102,10 @@ pub fn generate_outer_proof(
     // Set recursive proof data - verifies inner proof (C1-C4)
     pw.set_proof_with_pis_target(&outer.targets.proof, &inner_proof)?;
     pw.set_verifier_data_target(&outer.targets.vd, &inner.data.verifier_only)?;
+    
+    // Set pk_issuer witness (public input in outer circuit)
+    pw.set_biguint_target(&outer.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&outer.targets.pk_issuer.y.value, &pk_issuer_y.to_canonical_biguint())?;
         
     // Set derivation witnesses (mode-specific)
     match &outer.targets.key_derivation_targets {
