@@ -23,16 +23,16 @@ public class CredentialWalletBindingExtended {
     private BigInteger[] s;       // [6] - shared with EUDI verification
     private BigInteger[] sk_0;    // [4]
 
-    // Extended JWS fields for binding proof (Circom-compatible)
-    private BigInteger[] headerB64;        // ASCII bytes as BigInteger array
-    private BigInteger headerB64Length;    // actual length of header
-    private BigInteger[] payloadB64;       // ASCII bytes as BigInteger array  
-    private BigInteger payloadB64Length;   // actual length of payload
+    // Extended JWS fields for binding proof
+    private BigInteger[] headerB64;        // Base64url header as ASCII bytes (for SHA-256)
+    private BigInteger headerB64Length;    // actual length of Base64url header
+    private BigInteger[] payloadB64;       // Base64url payload as ASCII bytes (for SHA-256)
+    private BigInteger payloadB64Length;   // actual length of Base64url payload
     
-    // JWK extraction offsets/lengths for Circom
-    private BigInteger offX;               // start offset of Base64url string of x in decoded payload
-    private BigInteger lenX;               // length of x string in characters
-    private BigInteger offY;               // start offset of Base64url string of y in decoded payload
-    private BigInteger lenY;               // length of y string in characters
+    // Base64url coordinate offsets (for efficient circuit processing)
+    private BigInteger offXB64;            // start offset of x coordinate in Base64url payload
+    private BigInteger lenXB64;            // length of x coordinate Base64url string (44 chars)
+    private BigInteger offYB64;            // start offset of y coordinate in Base64url payload
+    private BigInteger lenYB64;            // length of y coordinate Base64url string (44 chars)
 
 }

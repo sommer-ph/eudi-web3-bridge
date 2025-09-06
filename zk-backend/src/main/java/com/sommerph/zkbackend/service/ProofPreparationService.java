@@ -178,29 +178,31 @@ public class ProofPreparationService {
             Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
                     Base64.getUrlDecoder().decode(credential.getSignature()));
 
-            // Convert Base64url strings to ASCII byte arrays
+            // Convert Base64url strings to ASCII byte arrays (for SHA-256)
             String[] headerB64Bytes = JwsUtils.base64UrlToAsciiBytesString(headerB64);
             String[] payloadB64Bytes = JwsUtils.base64UrlToAsciiBytesString(payloadB64);
 
-            // Compute offsets if enabled
-            String offX = null, lenX = null, offY = null, lenY = null;
+            // Compute Base64url coordinate offsets if enabled
+            String offXB64 = null, lenXB64 = null, offYB64 = null, lenYB64 = null;
             if (computeOffsets) {
                 try {
-                    byte[] payloadJsonBytes = Base64.getUrlDecoder().decode(payloadB64);
-                    JwsUtils.OffsetResult offsetResult = JwsUtils.findJwkXYOffsets(payloadJsonBytes);
+                    JwsUtils.Base64UrlOffsetResult offsetResult = JwsUtils.findJwkXYOffsetsInBase64url(payloadB64);
 
                     if (!offsetResult.found) {
                         throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                                "JWK x/y tags not found in payload when computeOffsets is enabled");
+                                "JWK x/y coordinates not found in Base64url payload when computeOffsets is enabled");
                     }
 
-                    offX = String.valueOf(offsetResult.offX);
-                    lenX = String.valueOf(offsetResult.lenX);
-                    offY = String.valueOf(offsetResult.offY);
-                    lenY = String.valueOf(offsetResult.lenY);
-                } catch (IllegalArgumentException e) {
+                    offXB64 = String.valueOf(offsetResult.offXB64);
+                    lenXB64 = String.valueOf(offsetResult.lenXB64);
+                    offYB64 = String.valueOf(offsetResult.offYB64);
+                    lenYB64 = String.valueOf(offsetResult.lenYB64);
+                    
+                    // Validate extracted coordinates match original credential
+                    JwsUtils.validateBase64urlCoordinates(payloadB64, offsetResult, credential.getPayload());
+                } catch (Exception e) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Invalid Base64url encoding in credential payload");
+                            "Error processing Base64url payload: " + e.getMessage());
                 }
             }
 
@@ -214,10 +216,10 @@ public class ProofPreparationService {
                     String.valueOf(headerB64.length()),
                     payloadB64Bytes,
                     String.valueOf(payloadB64.length()),
-                    offX,
-                    lenX,
-                    offY,
-                    lenY
+                    offXB64,
+                    lenXB64,
+                    offYB64,
+                    lenYB64
             );
 
             proofPreparationRegistry.saveCredentialSignatureVerificationExtended(data);

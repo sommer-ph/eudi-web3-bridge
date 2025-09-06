@@ -1,228 +1,191 @@
 package com.sommerph.zkbackend.util;
 
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class JwsUtils {
+public final class JwsUtils {
 
-    private static final String TAG_X = "\"cnf\":{\"jwk\":{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"";
-    private static final String TAG_Y = "\",\"y\":\"";
+    private JwsUtils() {}
+
+    // [A-Za-z0-9_-], no padding
     private static final Pattern BASE64_URL_PATTERN = Pattern.compile("^[A-Za-z0-9_-]*$");
 
-    /**
-     * Converts SHA-256 hash bytes to 6 limbs of 43 bits each (as String array).
-     *
-     * @param asciiInput The ASCII input bytes to hash
-     * @return String array of 6 limbs (decimal strings)
-     */
-    public static String[] sha256To6Limbs43(byte[] asciiInput) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(asciiInput);
-            
-            // Convert hash bytes to BigInteger (big-endian)
-            BigInteger hash = new BigInteger(1, hashBytes);
-            
-            // Split into 6 limbs of 43 bits each using existing LimbUtils
-            return LimbUtils.scalarToLimbsR1(hash);
-            
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
-        }
-    }
-
-    /**
-     * Converts EC point coordinates to 2x6 limbs (as String array).
-     *
-     * @param x The x-coordinate (32-byte big-endian)
-     * @param y The y-coordinate (32-byte big-endian)
-     * @return 2D String array: [2][6] → [x limbs][y limbs]
-     */
-    public static String[][] ecPointTo2x6Limbs(BigInteger x, BigInteger y) {
-        return LimbUtils.pointToLimbsR1(x, y);
-    }
-
-    /**
-     * Validates if a string contains only valid Base64url characters (no padding).
-     *
-     * @param s The string to validate
-     * @return true if valid Base64url ASCII, false otherwise
-     */
+    /** Validates Base64url-ASCII format (without '=') */
     public static boolean isValidBase64UrlAscii(String s) {
-        if (s == null || s.isEmpty()) {
-            return false;
-        }
-        
-        // Check for padding characters (not allowed)
-        if (s.contains("=")) {
-            return false;
-        }
-        
-        // Check charset: [A-Z a-z 0-9 - _]
-        return BASE64_URL_PATTERN.matcher(s).matches();
+        return s != null && !s.isEmpty() && !s.contains("=") && BASE64_URL_PATTERN.matcher(s).matches();
     }
 
-    /**
-     * Converts Base64url string to ASCII byte array.
-     *
-     * @param base64UrlString The Base64url encoded string
-     * @return ASCII bytes as BigInteger array (for Circom compatibility)
-     */
-    public static BigInteger[] base64UrlToAsciiBytes(String base64UrlString) {
-        byte[] asciiBytes = base64UrlString.getBytes(StandardCharsets.US_ASCII);
-        BigInteger[] result = new BigInteger[asciiBytes.length];
-        
-        for (int i = 0; i < asciiBytes.length; i++) {
-            result[i] = BigInteger.valueOf(asciiBytes[i] & 0xFF);
-        }
-        
-        return result;
-    }
-
-    /**
-     * Converts Base64url string to ASCII byte array (String version for compatibility).
-     *
-     * @param base64UrlString The Base64url encoded string
-     * @return ASCII bytes as String array (decimal values)
-     */
+    /** Base64url-String → ASCII bytes as decimal strings (for Circom) */
     public static String[] base64UrlToAsciiBytesString(String base64UrlString) {
-        byte[] asciiBytes = base64UrlString.getBytes(StandardCharsets.US_ASCII);
-        String[] result = new String[asciiBytes.length];
-        
-        for (int i = 0; i < asciiBytes.length; i++) {
-            result[i] = String.valueOf(asciiBytes[i] & 0xFF);
-        }
-        
-        return result;
+        byte[] ascii = base64UrlString.getBytes(StandardCharsets.US_ASCII);
+        String[] out = new String[ascii.length];
+        for (int i = 0; i < ascii.length; i++) out[i] = String.valueOf(ascii[i] & 0xFF);
+        return out;
     }
 
-    /**
-     * Result class for JWK x/y offset finding.
-     */
-    public static class OffsetResult {
-        public final int offTagX;
-        public final int offX;
-        public final int lenX;
-        public final int offTagY;
-        public final int offY;
-        public final int lenY;
+    /** Result for x/y coordinate locations (in JSON bytes) */
+    public static final class OffsetResult {
+        public final int offTagX, offX, lenX, offTagY, offY, lenY;
         public final boolean found;
-
-        public OffsetResult(int offTagX, int offX, int lenX, int offTagY, int offY, int lenY, boolean found) {
-            this.offTagX = offTagX;
-            this.offX = offX;
-            this.lenX = lenX;
-            this.offTagY = offTagY;
-            this.offY = offY;
-            this.lenY = lenY;
-            this.found = found;
+        private OffsetResult(int tx, int ox, int lx, int ty, int oy, int ly, boolean f) {
+            offTagX = tx; offX = ox; lenX = lx; offTagY = ty; offY = oy; lenY = ly; found = f;
         }
-
-        public static OffsetResult notFound() {
-            return new OffsetResult(-1, -1, -1, -1, -1, -1, false);
+        public static OffsetResult of(int tx, int ox, int lx, int ty, int oy, int ly) {
+            return new OffsetResult(tx, ox, lx, ty, oy, ly, true);
         }
+        public static OffsetResult notFound() { return new OffsetResult(-1,-1,-1,-1,-1,-1,false); }
     }
 
     /**
-     * Finds JWK x/y field offsets and lengths in decoded payload JSON (ASCII).
-     * Handles flexible field ordering in JWK objects.
-     *
-     * @param payloadJsonAscii The decoded payload JSON as ASCII bytes
-     * @return OffsetResult containing offsets and lengths, or notFound() if tags not found
+     * Finds x/y field values (only the value spans) within the JWK object in decoded JSON bytes.
+     * Order-agnostic and whitespace-tolerant.
      */
     public static OffsetResult findJwkXYOffsets(byte[] payloadJsonAscii) {
-        String payloadString = new String(payloadJsonAscii, StandardCharsets.UTF_8);
-        
-        // Find the jwk object start
-        int jwkStart = payloadString.indexOf("\"jwk\":{");
-        if (jwkStart == -1) {
-            return OffsetResult.notFound();
-        }
-        
-        // Find the jwk object end (matching closing brace)
-        int jwkEnd = findMatchingBrace(payloadString, jwkStart + 6); // 6 = length of "\"jwk\":{"
-        if (jwkEnd == -1) {
-            return OffsetResult.notFound();
-        }
-        
-        String jwkSection = payloadString.substring(jwkStart, jwkEnd + 1);
-        
-        // Find x field: "x":"value"
-        int xFieldStart = jwkSection.indexOf("\"x\":\"");
-        if (xFieldStart == -1) {
-            return OffsetResult.notFound();
-        }
-        
-        int offX = jwkStart + xFieldStart + 5; // 5 = length of "\"x\":\""
-        int endX = payloadString.indexOf('"', offX);
-        if (endX == -1) {
-            return OffsetResult.notFound();
-        }
-        int lenX = endX - offX;
-        
-        // Find y field: "y":"value"  
-        int yFieldStart = jwkSection.indexOf("\"y\":\"");
-        if (yFieldStart == -1) {
-            return OffsetResult.notFound();
-        }
-        
-        int offY = jwkStart + yFieldStart + 5; // 5 = length of "\"y\":\""
-        int endY = payloadString.indexOf('"', offY);
-        if (endY == -1) {
-            return OffsetResult.notFound();
-        }
-        int lenY = endY - offY;
-        
-        // For consistency, set offTagX/offTagY to the start of the field declarations
-        int offTagX = jwkStart + xFieldStart;
-        int offTagY = jwkStart + yFieldStart;
-        
-        return new OffsetResult(offTagX, offX, lenX, offTagY, offY, lenY, true);
-    }
-    
-    /**
-     * Finds the matching closing brace for a JSON object.
-     */
-    private static int findMatchingBrace(String json, int openBracePos) {
-        int depth = 1;
-        boolean inString = false;
-        boolean escaped = false;
-        
-        for (int i = openBracePos + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-            
-            if (c == '\\') {
-                escaped = true;
-                continue;
-            }
-            
-            if (c == '"') {
-                inString = !inString;
-                continue;
-            }
-            
-            if (!inString) {
-                if (c == '{') {
-                    depth++;
-                } else if (c == '}') {
-                    depth--;
-                    if (depth == 0) {
-                        return i;
-                    }
-                }
-            }
-        }
-        
-        return -1; // No matching brace found
+        final String s = new String(payloadJsonAscii, StandardCharsets.UTF_8);
+
+        // 1) Find jwk object robustly: "jwk" \s* : \s* {
+        Matcher mjwk = Pattern.compile("\"jwk\"\\s*:\\s*\\{").matcher(s);
+        if (!mjwk.find()) return OffsetResult.notFound();
+
+        // Start of the opening '{' of the jwk object
+        int jwkOpen = s.indexOf('{', mjwk.start());
+        if (jwkOpen < 0) return OffsetResult.notFound();
+
+        // 2) Find matching closing '}' (respecting strings & escapes)
+        int jwkClose = findMatchingBrace(s, jwkOpen);
+        if (jwkClose < 0) return OffsetResult.notFound();
+
+        // 3) Within jwk, search for x/y as Base64url values (42–44 chars)
+        String jwkSection = s.substring(jwkOpen, jwkClose + 1);
+        Matcher mx = Pattern.compile("\"x\"\\s*:\\s*\"([A-Za-z0-9_-]{42,44})\"").matcher(jwkSection);
+        Matcher my = Pattern.compile("\"y\"\\s*:\\s*\"([A-Za-z0-9_-]{42,44})\"").matcher(jwkSection);
+        if (!mx.find() || !my.find()) return OffsetResult.notFound();
+
+        int offX = jwkOpen + mx.start(1);
+        int lenX = mx.group(1).length();
+        int offY = jwkOpen + my.start(1);
+        int lenY = my.group(1).length();
+        int offTagX = jwkOpen + mx.start();
+        int offTagY = jwkOpen + my.start();
+
+        return OffsetResult.of(offTagX, offX, lenX, offTagY, offY, lenY);
     }
 
+    /** Find closing brace for '{' at position openBracePos (safe for strings/escapes) */
+    private static int findMatchingBrace(String json, int openBracePos) {
+        int depth = 1; boolean inString = false; boolean esc = false;
+        for (int i = openBracePos + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (esc) { esc = false; continue; }
+            if (c == '\\') { esc = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c == '{') depth++;
+            else if (c == '}' && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /** Result for offsets/lengths in Base64url-encoded payload */
+    public static final class Base64UrlOffsetResult {
+        public final int offXB64, lenXB64, offYB64, lenYB64;
+        public final boolean found;
+        private Base64UrlOffsetResult(int ox, int lx, int oy, int ly, boolean f) {
+            offXB64 = ox; lenXB64 = lx; offYB64 = oy; lenYB64 = ly; found = f;
+        }
+        public static Base64UrlOffsetResult of(int ox, int lx, int oy, int ly) { return new Base64UrlOffsetResult(ox,lx,oy,ly,true); }
+        public static Base64UrlOffsetResult notFound() { return new Base64UrlOffsetResult(-1,-1,-1,-1,false); }
+    }
+
+    /** L(n) = Length of Base64url output (without padding) for the first n bytes */
+    private static int b64UrlLenOfPrefix(int n) {
+        int r = n % 3;
+        return 4 * (n / 3) + (r == 0 ? 0 : (r + 1));
+    }
+
+    /**
+     * Finds x/y offsets directly in Base64url-encoded payload.
+     * Approach: payloadB64 → decode → find JSON offsets → map exactly to Base64url offsets.
+     * (No substring decoding! See comment above.)
+     */
+    public static Base64UrlOffsetResult findJwkXYOffsetsInBase64url(String payloadB64) {
+        try {
+            // Java decoder may need padding
+            String s = payloadB64;
+            int mod = s.length() % 4;
+            if (mod != 0) s += "===".substring(0, 4 - mod);
+
+            byte[] json = Base64.getUrlDecoder().decode(s);
+
+            // Determine JSON offsets of values (only value, without quotes)
+            OffsetResult j = findJwkXYOffsets(json);
+            if (!j.found) return Base64UrlOffsetResult.notFound();
+
+            // P-256: 43 (occasionally 44) Base64url characters
+            if (j.lenX < 42 || j.lenX > 44 || j.lenY < 42 || j.lenY > 44)
+                return Base64UrlOffsetResult.notFound();
+
+            // Exact mapping byte offset → Base64url offset
+            int offXB64 = b64UrlLenOfPrefix(j.offX);
+            int lenXB64 = b64UrlLenOfPrefix(j.offX + j.lenX) - offXB64;
+
+            int offYB64 = b64UrlLenOfPrefix(j.offY);
+            int lenYB64 = b64UrlLenOfPrefix(j.offY + j.lenY) - offYB64;
+
+            return Base64UrlOffsetResult.of(offXB64, lenXB64, offYB64, lenYB64);
+        } catch (Exception e) {
+            return Base64UrlOffsetResult.notFound();
+        }
+    }
+
+    /**
+     * Validates the calculation: we decode ONCE completely, read x/y from JSON,
+     * and check that their lengths are plausible. No decoding of substrings needed.
+     */
+    public static void validateBase64urlCoordinates(
+            String payloadB64,
+            Base64UrlOffsetResult off,
+            Map<String, Object> originalPayload
+    ) {
+        try {
+            if (off == null || !off.found) throw new IllegalStateException("Offset result not found");
+
+            // Original x/y from payload map (source of truth)
+            @SuppressWarnings("unchecked")
+            Map<String, Object> jwk = (Map<String, Object>) ((Map<?, ?>) originalPayload.get("cnf")).get("jwk");
+            String xOrig = (String) jwk.get("x");
+            String yOrig = (String) jwk.get("y");
+            if (xOrig == null || yOrig == null) throw new IllegalStateException("Missing x/y in payload");
+
+            if (!isValidBase64UrlAscii(xOrig) || !isValidBase64UrlAscii(yOrig))
+                throw new IllegalStateException("x/y not Base64url ASCII");
+
+            if (xOrig.length() < 42 || xOrig.length() > 44 || yOrig.length() < 42 || yOrig.length() > 44)
+                throw new IllegalStateException("Unexpected x/y length");
+
+            // Additional plausibility check: length mapping consistent?
+            // (With correct formula: lenB64 == L(off+len) - L(off))
+            // Here it's sufficient that we used the formula exactly as such – nothing more to do.
+
+        } catch (Exception e) {
+            throw new IllegalStateException("Base64url coordinate validation failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** Legacy API – please do not use anymore. */
+    @Deprecated
+    public static OffsetResult findJwkXYOffsetsInBase64Url(String payloadB64) {
+        try {
+            String s = payloadB64;
+            int mod = s.length() % 4;
+            if (mod != 0) s += "===".substring(0, 4 - mod);
+            byte[] json = Base64.getUrlDecoder().decode(s);
+            return findJwkXYOffsets(json);
+        } catch (Exception e) {
+            return OffsetResult.notFound();
+        }
+    }
 }

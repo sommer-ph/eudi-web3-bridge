@@ -183,10 +183,10 @@ public class ExportUtils {
                 new BigInteger(c3Extended.getHeaderB64Length()),     // headerB64Length
                 toBigIntArray(c3Extended.getPayloadB64()),           // payloadB64
                 new BigInteger(c3Extended.getPayloadB64Length()),    // payloadB64Length
-                c3Extended.getOffX() != null ? new BigInteger(c3Extended.getOffX()) : null,  // offX
-                c3Extended.getLenX() != null ? new BigInteger(c3Extended.getLenX()) : null,  // lenX
-                c3Extended.getOffY() != null ? new BigInteger(c3Extended.getOffY()) : null,  // offY
-                c3Extended.getLenY() != null ? new BigInteger(c3Extended.getLenY()) : null   // lenY
+                c3Extended.getOffXB64() != null ? new BigInteger(c3Extended.getOffXB64()) : null,  // offXB64
+                c3Extended.getLenXB64() != null ? new BigInteger(c3Extended.getLenXB64()) : null,  // lenXB64
+                c3Extended.getOffYB64() != null ? new BigInteger(c3Extended.getOffYB64()) : null,  // offYB64
+                c3Extended.getLenYB64() != null ? new BigInteger(c3Extended.getLenYB64()) : null   // lenYB64
         );
     }
 
@@ -212,12 +212,12 @@ public class ExportUtils {
             json.put("payloadB64", toStringArray(binding.getPayloadB64()));
             json.put("payloadB64Length", binding.getPayloadB64Length().toString());
             
-            // Optional offset fields
-            if (binding.getOffX() != null) {
-                json.put("offX", binding.getOffX().toString());
-                json.put("lenX", binding.getLenX().toString());
-                json.put("offY", binding.getOffY().toString());
-                json.put("lenY", binding.getLenY().toString());
+            // Base64url coordinate offset fields
+            if (binding.getOffXB64() != null) {
+                json.put("offXB64", binding.getOffXB64().toString());
+                json.put("lenXB64", binding.getLenXB64().toString());
+                json.put("offYB64", binding.getOffYB64().toString());
+                json.put("lenYB64", binding.getLenYB64().toString());
             }
             
             String path = properties.getStorage().getPath() + "/" + userId + "-credential-wallet-binding-extended.json";

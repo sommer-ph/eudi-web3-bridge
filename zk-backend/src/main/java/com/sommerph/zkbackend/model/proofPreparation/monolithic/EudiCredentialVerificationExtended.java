@@ -17,16 +17,16 @@ public class EudiCredentialVerificationExtended {
     private String[] r;        // [6] -> 6 limbs á 43 bits
     private String[] s;        // [6] -> 6 limbs á 43 bits
 
-    // Extended JWS fields for binding proof (Circom-compatible)
-    private String[] headerB64;        // ASCII bytes as String array (for compatibility)
-    private String headerB64Length;    // actual length of header
-    private String[] payloadB64;       // ASCII bytes as String array (for compatibility)  
-    private String payloadB64Length;   // actual length of payload
+    // Extended JWS fields for binding proof
+    private String[] headerB64;        // Base64url header as ASCII bytes (for SHA-256)
+    private String headerB64Length;    // actual length of Base64url header
+    private String[] payloadB64;       // Base64url payload as ASCII bytes (for SHA-256)
+    private String payloadB64Length;   // actual length of Base64url payload
     
-    // JWK extraction offsets/lengths
-    private String offX;               // start offset of Base64url string of x in decoded payload
-    private String lenX;               // length of x string in characters
-    private String offY;               // start offset of Base64url string of y in decoded payload
-    private String lenY;               // length of y string in characters
+    // Base64url coordinate offsets (for efficient circuit processing)
+    private String offXB64;            // start offset of x coordinate in Base64url payload
+    private String lenXB64;            // length of x coordinate Base64url string (44 chars)
+    private String offYB64;            // start offset of y coordinate in Base64url payload
+    private String lenYB64;            // length of y coordinate Base64url string (44 chars)
 
 }
