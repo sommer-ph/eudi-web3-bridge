@@ -69,6 +69,22 @@ public class JsonFileProofPreparationRegistry implements ProofPreparationRegistr
         return fileExists(userId + "-eudi-credential-verification.json");
     }
 
+    // C3 Extended
+    @Override
+    public void saveCredentialSignatureVerificationExtended(EudiCredentialVerificationExtended data) {
+        writeToFile(data.getUserId() + "-eudi-credential-verification-extended.json", data);
+    }
+
+    @Override
+    public EudiCredentialVerificationExtended loadCredentialSignatureVerificationExtended(String userId) {
+        return readFromFile(userId + "-eudi-credential-verification-extended.json", EudiCredentialVerificationExtended.class);
+    }
+
+    @Override
+    public boolean existsCredentialSignatureVerificationExtended(String userId) {
+        return fileExists(userId + "-eudi-credential-verification-extended.json");
+    }
+
     // C4
     @Override
     public void saveBlockchainWalletKeyDerivation(BlockchainKeyDerivation data) {

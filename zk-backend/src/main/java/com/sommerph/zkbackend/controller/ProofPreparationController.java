@@ -34,6 +34,19 @@ public class ProofPreparationController {
         }
     }
 
+    @Operation(summary = "Prepare all data for extended credential-wallet binding proof (with JWS binding)")
+    @PostMapping("/cred-bind-extended/{userId}")
+    public ResponseEntity<?> prepareCredBindExtendedProof(@PathVariable @NotBlank String userId) {
+        log.info("Prepare extended credential-wallet binding proof for user: {}", userId);
+        try {
+            proofService.prepareCredBindExtendedProof(userId);
+            return ResponseEntity.ok("Extended credential-wallet binding proof data prepared for user: " + userId);
+        } catch (Exception e) {
+            log.error("Failed to prepare extended credential-wallet binding proof for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error preparing extended proof: " + e.getMessage());
+        }
+    }
+
     @Operation(summary = "Prepare EUDI wallet key derivation data")
     @PostMapping("/eudi-key-derivation/{userId}")
     public ResponseEntity<?> prepareEudiKeyDerivation(@PathVariable @NotBlank String userId) {
@@ -69,6 +82,19 @@ public class ProofPreparationController {
             return ResponseEntity.ok("EUDI credential verification data prepared for user: " + userId);
         } catch (Exception e) {
             log.error("Failed to prepare EUDI credential verification for user: {}", userId, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "Prepare extended EUDI credential verification data (with JWS binding)")
+    @PostMapping("/eudi-cred-verification-extended/{userId}")
+    public ResponseEntity<?> prepareEudiCredentialVerificationExtended(@PathVariable @NotBlank String userId) {
+        log.info("Prepare extended EUDI credential verification for user: {}", userId);
+        try {
+            proofService.prepareEudiCredentialVerificationExtended(userId);
+            return ResponseEntity.ok("Extended EUDI credential verification data prepared for user: " + userId);
+        } catch (Exception e) {
+            log.error("Failed to prepare extended EUDI credential verification for user: {}", userId, e);
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }

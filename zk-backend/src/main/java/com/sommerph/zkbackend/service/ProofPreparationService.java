@@ -11,11 +11,20 @@ import com.sommerph.zkbackend.service.eudi.EudiWalletService;
 import com.sommerph.zkbackend.service.blockchain.BlockchainKeyManagementService;
 import com.sommerph.zkbackend.service.blockchain.BlockchainWalletService;
 import com.sommerph.zkbackend.util.ExportUtils;
+import com.sommerph.zkbackend.util.JwsUtils;
+import com.sommerph.zkbackend.util.SignatureUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.DeterministicKey;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 @Slf4j
@@ -29,6 +38,9 @@ public class ProofPreparationService {
     private final BlockchainKeyManagementService blockchainKeyManagementService;
     private final ProofPreparationRegistry proofPreparationRegistry;
     private final ExportUtils exportUtils;
+    
+    @Value("${proof.extended.computeOffsets:true}")
+    private boolean computeOffsets;
 
     public void prepareCredBindProof(String userId) {
         log.info("Prepare data for cred-bind proof for user: {}", userId);
@@ -44,6 +56,22 @@ public class ProofPreparationService {
             exportUtils.writeCredBindDataToFile(binding, userId);
         } catch (Exception e) {
             throw new RuntimeException("Failed to export cred-bind proof data for user: " + userId, e);
+        }
+    }
+
+    public void prepareCredBindExtendedProof(String userId) {
+        log.info("Prepare extended data for cred-bind proof for user: {}", userId);
+        prepareEudiWalletKeyDerivation(userId);
+        prepareEudiCredentialPublicKeyCheck(userId);
+        prepareEudiCredentialVerificationExtended(userId);
+        prepareBlockchainWalletChildKeyDerivation(userId, 0);
+
+        log.info("Export extended cred-bind proof data for user: {}", userId);
+        try {
+            CredentialWalletBindingExtended bindingExtended = exportUtils.createCredentialWalletBindingExtended(userId, proofPreparationRegistry);
+            exportUtils.writeCredBindExtendedDataToFile(bindingExtended, userId);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to export extended cred-bind proof data for user: " + userId, e);
         }
     }
 
@@ -118,6 +146,86 @@ public class ProofPreparationService {
             proofPreparationRegistry.saveCredentialSignatureVerification(data);
         } catch (Exception e) {
             throw new RuntimeException("Error preparing credential verification data for user: " + userId, e);
+        }
+    }
+
+    // C3 Extended
+    public void prepareEudiCredentialVerificationExtended(String userId) {
+        log.info("Prepare extended data for EUDI credential verification for user: {}", userId);
+
+        try {
+            EudiWallet wallet = eudiWalletService.loadWallet(userId);
+            EudiCredential credential = wallet.getCredentials().get(0);
+
+            // Convert header/payload maps to Base64url strings like in existing service method
+            ObjectMapper mapper = new ObjectMapper();
+            String headerB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(credential.getHeader()));
+            String payloadB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(credential.getPayload()));
+
+            // Validate Base64url strings
+            if (!JwsUtils.isValidBase64UrlAscii(headerB64)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid Base64url characters in credential header");
+            }
+            if (!JwsUtils.isValidBase64UrlAscii(payloadB64)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid Base64url characters in credential payload");
+            }
+
+            // Get existing limb data
+            String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
+            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(credential.getHeader(), credential.getPayload());
+            Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
+                    Base64.getUrlDecoder().decode(credential.getSignature()));
+
+            // Convert Base64url strings to ASCII byte arrays
+            String[] headerB64Bytes = JwsUtils.base64UrlToAsciiBytesString(headerB64);
+            String[] payloadB64Bytes = JwsUtils.base64UrlToAsciiBytesString(payloadB64);
+
+            // Compute offsets if enabled
+            String offX = null, lenX = null, offY = null, lenY = null;
+            if (computeOffsets) {
+                try {
+                    byte[] payloadJsonBytes = Base64.getUrlDecoder().decode(payloadB64);
+                    JwsUtils.OffsetResult offsetResult = JwsUtils.findJwkXYOffsets(payloadJsonBytes);
+
+                    if (!offsetResult.found) {
+                        throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                                "JWK x/y tags not found in payload when computeOffsets is enabled");
+                    }
+
+                    offX = String.valueOf(offsetResult.offX);
+                    lenX = String.valueOf(offsetResult.lenX);
+                    offY = String.valueOf(offsetResult.offY);
+                    lenY = String.valueOf(offsetResult.lenY);
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Invalid Base64url encoding in credential payload");
+                }
+            }
+
+            EudiCredentialVerificationExtended data = new EudiCredentialVerificationExtended(
+                    userId,
+                    pkILimbs,
+                    msgHashLimbs,
+                    sigLimbs.get("r"),
+                    sigLimbs.get("s"),
+                    headerB64Bytes,
+                    String.valueOf(headerB64.length()),
+                    payloadB64Bytes,
+                    String.valueOf(payloadB64.length()),
+                    offX,
+                    lenX,
+                    offY,
+                    lenY
+            );
+
+            proofPreparationRegistry.saveCredentialSignatureVerificationExtended(data);
+
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error preparing extended EUDI credential verification for user: " + userId, e);
         }
     }
 

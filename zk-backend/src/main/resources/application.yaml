@@ -54,3 +54,5 @@ proof:
       type: json
     storage:
       path: data/proof-preparation
+  extended:
+    computeOffsets: true

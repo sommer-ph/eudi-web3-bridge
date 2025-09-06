@@ -151,4 +151,80 @@ public class ExportUtils {
         }
     }
 
+    public CredentialWalletBindingExtended createCredentialWalletBindingExtended(String userId, ProofPreparationRegistry registry) {
+        if (!registry.existsEudiWalletKeyDerivation(userId)) {
+            throw new RuntimeException("Missing preparation data: C1 - EUDI Wallet Key Derivation");
+        }
+        if (!registry.existsCredentialPKCheck(userId)) {
+            throw new RuntimeException("Missing preparation data: C2 - Credential Public Key Check");
+        }
+        if (!registry.existsCredentialSignatureVerificationExtended(userId)) {
+            throw new RuntimeException("Missing preparation data: C3 Extended - Credential Signature Verification Extended");
+        }
+        if (!registry.existsBlockchainWalletKeyDerivation(userId)) {
+            throw new RuntimeException("Missing preparation data: C4 - Blockchain Wallet Key Derivation");
+        }
+
+        EudiKeyDerivation c1 = registry.loadEudiWalletKeyDerivation(userId);
+        EudiCredentialPublicKeyCheck c2 = registry.loadCredentialPKCheck(userId);
+        EudiCredentialVerificationExtended c3Extended = registry.loadCredentialSignatureVerificationExtended(userId);
+        BlockchainKeyDerivation c4 = registry.loadBlockchainWalletKeyDerivation(userId);
+
+        return new CredentialWalletBindingExtended(
+                toBigIntArray2D(c3Extended.getPk_I()),               // pk_I
+                toBigIntArray2D(c4.getPk_0()),                       // pk_0
+                toBigIntArray(c1.getSk_c()),                         // sk_c
+                toBigIntArray2D(c2.getPk_cred()),                    // pk_c
+                toBigIntArray(c3Extended.getMsghash()),              // msghash
+                toBigIntArray(c3Extended.getR()),                    // r
+                toBigIntArray(c3Extended.getS()),                    // s
+                toBigIntArray(c4.getSk_0()),                         // sk_0
+                toBigIntArray(c3Extended.getHeaderB64()),            // headerB64
+                new BigInteger(c3Extended.getHeaderB64Length()),     // headerB64Length
+                toBigIntArray(c3Extended.getPayloadB64()),           // payloadB64
+                new BigInteger(c3Extended.getPayloadB64Length()),    // payloadB64Length
+                c3Extended.getOffX() != null ? new BigInteger(c3Extended.getOffX()) : null,  // offX
+                c3Extended.getLenX() != null ? new BigInteger(c3Extended.getLenX()) : null,  // lenX
+                c3Extended.getOffY() != null ? new BigInteger(c3Extended.getOffY()) : null,  // offY
+                c3Extended.getLenY() != null ? new BigInteger(c3Extended.getLenY()) : null   // lenY
+        );
+    }
+
+    public void writeCredBindExtendedDataToFile(CredentialWalletBindingExtended binding, String userId) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            Map<String, Object> json = new LinkedHashMap<>();
+            
+            // Basic fields
+            json.put("pk_I", toStringArray2D(binding.getPk_I()));
+            json.put("pk_0", toStringArray2D(binding.getPk_0()));
+            json.put("sk_c", toStringArray(binding.getSk_c()));
+            json.put("pk_c", toStringArray2D(binding.getPk_c()));
+            json.put("msghash", toStringArray(binding.getMsghash()));
+            json.put("r", toStringArray(binding.getR()));
+            json.put("s", toStringArray(binding.getS()));
+            json.put("sk_0", toStringArray(binding.getSk_0()));
+            
+            // Extended JWS fields
+            json.put("headerB64", toStringArray(binding.getHeaderB64()));
+            json.put("headerB64Length", binding.getHeaderB64Length().toString());
+            json.put("payloadB64", toStringArray(binding.getPayloadB64()));
+            json.put("payloadB64Length", binding.getPayloadB64Length().toString());
+            
+            // Optional offset fields
+            if (binding.getOffX() != null) {
+                json.put("offX", binding.getOffX().toString());
+                json.put("lenX", binding.getLenX().toString());
+                json.put("offY", binding.getOffY().toString());
+                json.put("lenY", binding.getLenY().toString());
+            }
+            
+            String path = properties.getStorage().getPath() + "/" + userId + "-credential-wallet-binding-extended.json";
+            mapper.writeValue(new File(path), json);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to write extended cred-bind export file", e);
+        }
+    }
+
 }

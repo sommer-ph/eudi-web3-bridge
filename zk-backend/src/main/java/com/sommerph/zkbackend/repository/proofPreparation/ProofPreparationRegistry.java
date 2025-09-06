@@ -20,6 +20,11 @@ public interface ProofPreparationRegistry {
     EudiCredentialVerification loadCredentialSignatureVerification(String userId);
     boolean existsCredentialSignatureVerification(String userId);
 
+    // C3 Extended with JWS binding data
+    void saveCredentialSignatureVerificationExtended(EudiCredentialVerificationExtended data);
+    EudiCredentialVerificationExtended loadCredentialSignatureVerificationExtended(String userId);
+    boolean existsCredentialSignatureVerificationExtended(String userId);
+
     // C4: pk_0 = KeyDer(sk_0)
     void saveBlockchainWalletKeyDerivation(BlockchainKeyDerivation data);
     BlockchainKeyDerivation loadBlockchainWalletKeyDerivation(String userId);

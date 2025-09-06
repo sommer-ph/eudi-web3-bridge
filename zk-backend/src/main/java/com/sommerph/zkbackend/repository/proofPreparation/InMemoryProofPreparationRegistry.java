@@ -13,6 +13,7 @@ public class InMemoryProofPreparationRegistry implements ProofPreparationRegistr
     private final Map<String, EudiKeyDerivation> eudiWalletKeyStore = new ConcurrentHashMap<>();
     private final Map<String, EudiCredentialPublicKeyCheck> credentialPKStore = new ConcurrentHashMap<>();
     private final Map<String, EudiCredentialVerification> credentialVerificationStore = new ConcurrentHashMap<>();
+    private final Map<String, EudiCredentialVerificationExtended> credentialVerificationExtendedStore = new ConcurrentHashMap<>();
     private final Map<String, BlockchainKeyDerivation> blockchainWalletStore = new ConcurrentHashMap<>();
 
     // C1
@@ -61,6 +62,22 @@ public class InMemoryProofPreparationRegistry implements ProofPreparationRegistr
     @Override
     public boolean existsCredentialSignatureVerification(String userId) {
         return credentialVerificationStore.containsKey(userId);
+    }
+
+    // C3 Extended
+    @Override
+    public void saveCredentialSignatureVerificationExtended(EudiCredentialVerificationExtended data) {
+        credentialVerificationExtendedStore.put(data.getUserId(), data);
+    }
+
+    @Override
+    public EudiCredentialVerificationExtended loadCredentialSignatureVerificationExtended(String userId) {
+        return credentialVerificationExtendedStore.get(userId);
+    }
+
+    @Override
+    public boolean existsCredentialSignatureVerificationExtended(String userId) {
+        return credentialVerificationExtendedStore.containsKey(userId);
     }
 
     // C4

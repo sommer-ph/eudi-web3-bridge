@@ -1,0 +1,13 @@
+{
+  "userId" : "test",
+  "mnemonic" : "ceiling also useful abstract hockey hazard annual blush owner slide slow planet",
+  "base64MasterPublicKey" : "Arvs8K1AGwBfs9My8jhyNrBbpsl16cxQWQb4UsxfdMsp",
+  "base64MasterSecretKey" : "G559vb5ufxae7zoaKPA5d6zFAhQKwwUMYNJ2dwrKRGc=",
+  "base64MasterChainCode" : "NTA8QhkdngflxsDUdNqkqo9LEnGguULvlAMozsfK2sM=",
+  "childKeys" : [ {
+    "publicKeyBase64" : "AtvuHkJJT/v2WDXPlHIv1xT9uDLJkbnZCMinDAPI4F49",
+    "secretKeyBase64" : "ABPBCqNfC3Y5NTERD31qli6fsx8qjm40LwJ4VaFGH6o=",
+    "chainCodeBase64" : "IxIazi0VQAsNICNsZAWdd1yl3hZyM53YXBRMP5HD8mU=",
+    "derivationIndex" : 0
+  } ]
+}
