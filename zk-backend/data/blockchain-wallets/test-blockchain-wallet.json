@@ -1,13 +1,13 @@
 {
   "userId" : "test",
-  "mnemonic" : "ceiling also useful abstract hockey hazard annual blush owner slide slow planet",
-  "base64MasterPublicKey" : "Arvs8K1AGwBfs9My8jhyNrBbpsl16cxQWQb4UsxfdMsp",
-  "base64MasterSecretKey" : "G559vb5ufxae7zoaKPA5d6zFAhQKwwUMYNJ2dwrKRGc=",
-  "base64MasterChainCode" : "NTA8QhkdngflxsDUdNqkqo9LEnGguULvlAMozsfK2sM=",
+  "mnemonic" : "fold blue business execute festival screen shock day attitude lift appear truck",
+  "base64MasterPublicKey" : "A1mLpv8VHxdTzzAgpOMFVCmCZG1ChbjvpIy5s0fv+ChD",
+  "base64MasterSecretKey" : "yqxP0HZD2i51ZfiXgVtisMAC5q0wYucQcu5qsbhxzHE=",
+  "base64MasterChainCode" : "yg9OiH34v5PNwV0aNshe2cXv6zqJo2TS7aAp8ADvI+A=",
   "childKeys" : [ {
-    "publicKeyBase64" : "AtvuHkJJT/v2WDXPlHIv1xT9uDLJkbnZCMinDAPI4F49",
-    "secretKeyBase64" : "ABPBCqNfC3Y5NTERD31qli6fsx8qjm40LwJ4VaFGH6o=",
-    "chainCodeBase64" : "IxIazi0VQAsNICNsZAWdd1yl3hZyM53YXBRMP5HD8mU=",
+    "publicKeyBase64" : "A84aM7kLdjQOutbTHu1CpYSq0FiJv3xUblJIBNGsUmxb",
+    "secretKeyBase64" : "pYwGscgTJymhEPbIgHpt6gLy8eJeLG4A8OmRKhUHd20=",
+    "chainCodeBase64" : "MNyGVv3JaBJZWf8wBfeyCzCGD/HWE4yeJz4HN/E0VU8=",
     "derivationIndex" : 0
   } ]
 }

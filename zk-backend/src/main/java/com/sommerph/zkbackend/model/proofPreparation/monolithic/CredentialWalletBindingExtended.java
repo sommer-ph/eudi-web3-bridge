@@ -29,10 +29,14 @@ public class CredentialWalletBindingExtended {
     private BigInteger[] payloadB64;       // Base64url payload as ASCII bytes (for SHA-256)
     private BigInteger payloadB64Length;   // actual length of Base64url payload
     
-    // Base64url coordinate offsets (for efficient circuit processing)
-    private BigInteger offXB64;            // start offset of x coordinate in Base64url payload
-    private BigInteger lenXB64;            // length of x coordinate Base64url string (44 chars)
-    private BigInteger offYB64;            // start offset of y coordinate in Base64url payload
-    private BigInteger lenYB64;            // length of y coordinate Base64url string (44 chars)
+    // Aligned Base64url coordinate slice + inner selection
+    private BigInteger offXB64;            // aligned start offset of x in Base64url payload
+    private BigInteger lenXB64;            // aligned length (<=64)
+    private BigInteger dropX;              // bytes to drop after outer decode
+    private BigInteger lenXInner;          // inner Base64url ASCII length (43/44)
+    private BigInteger offYB64;            // aligned start offset of y in Base64url payload
+    private BigInteger lenYB64;            // aligned length (<=64)
+    private BigInteger dropY;              // bytes to drop after outer decode
+    private BigInteger lenYInner;          // inner Base64url ASCII length (43/44)
 
 }

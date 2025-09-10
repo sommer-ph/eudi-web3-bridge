@@ -44,5 +44,3 @@ template CredentialSignatureVerification () {
     // Output valid signal
     valid <== 1;
 }
-
-component main { public [ pk_I ] } = CredentialSignatureVerification();

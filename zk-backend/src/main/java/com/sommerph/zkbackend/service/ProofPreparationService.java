@@ -22,8 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
 
@@ -174,19 +172,24 @@ public class ProofPreparationService {
 
             // Get existing limb data
             String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
-            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(credential.getHeader(), credential.getPayload());
+            // Use circuit-style padded hash to match circuit’s fixed-length message layout
+            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialPaddedMsgHashLimbs(
+                    credential.getHeader(), credential.getPayload());
             Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
                     Base64.getUrlDecoder().decode(credential.getSignature()));
 
-            // Convert Base64url strings to ASCII byte arrays (for SHA-256)
-            String[] headerB64Bytes = JwsUtils.base64UrlToAsciiBytesString(headerB64);
-            String[] payloadB64Bytes = JwsUtils.base64UrlToAsciiBytesString(payloadB64);
+            // Convert Base64url strings to ASCII byte arrays (for SHA-256) and pad to circuit sizes
+            String[] headerB64BytesRaw = JwsUtils.base64UrlToAsciiBytesString(headerB64);
+            String[] payloadB64BytesRaw = JwsUtils.base64UrlToAsciiBytesString(payloadB64);
+            String[] headerB64Bytes = padOrTrim(headerB64BytesRaw, 64);
+            String[] payloadB64Bytes = padOrTrim(payloadB64BytesRaw, 1024);
 
-            // Compute Base64url coordinate offsets if enabled
-            String offXB64 = null, lenXB64 = null, offYB64 = null, lenYB64 = null;
+            // Compute aligned Base64url coordinate slices + inner selection if enabled
+            String offXB64 = null, lenXB64 = null, dropX = null, lenXInner = null;
+            String offYB64 = null, lenYB64 = null, dropY = null, lenYInner = null;
             if (computeOffsets) {
                 try {
-                    JwsUtils.Base64UrlOffsetResult offsetResult = JwsUtils.findJwkXYOffsetsInBase64url(payloadB64);
+                    JwsUtils.Base64UrlAlignedOffsetResult offsetResult = JwsUtils.findJwkXYOffsetsInBase64urlAligned(payloadB64);
 
                     if (!offsetResult.found) {
                         throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
@@ -195,11 +198,18 @@ public class ProofPreparationService {
 
                     offXB64 = String.valueOf(offsetResult.offXB64);
                     lenXB64 = String.valueOf(offsetResult.lenXB64);
+                    dropX = String.valueOf(offsetResult.dropX);
+                    lenXInner = String.valueOf(offsetResult.lenXInner);
                     offYB64 = String.valueOf(offsetResult.offYB64);
                     lenYB64 = String.valueOf(offsetResult.lenYB64);
+                    dropY = String.valueOf(offsetResult.dropY);
+                    lenYInner = String.valueOf(offsetResult.lenYInner);
                     
-                    // Validate extracted coordinates match original credential
-                    JwsUtils.validateBase64urlCoordinates(payloadB64, offsetResult, credential.getPayload());
+                    // Optional: validate lengths are plausible
+                    if (!(offsetResult.lenXInner == 43 || offsetResult.lenXInner == 44))
+                        throw new IllegalStateException("Unexpected x length");
+                    if (!(offsetResult.lenYInner == 43 || offsetResult.lenYInner == 44))
+                        throw new IllegalStateException("Unexpected y length");
                 } catch (Exception e) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Error processing Base64url payload: " + e.getMessage());
@@ -218,8 +228,12 @@ public class ProofPreparationService {
                     String.valueOf(payloadB64.length()),
                     offXB64,
                     lenXB64,
+                    dropX,
+                    lenXInner,
                     offYB64,
-                    lenYB64
+                    lenYB64,
+                    dropY,
+                    lenYInner
             );
 
             proofPreparationRegistry.saveCredentialSignatureVerificationExtended(data);
@@ -229,6 +243,14 @@ public class ProofPreparationService {
         } catch (Exception e) {
             throw new RuntimeException("Error preparing extended EUDI credential verification for user: " + userId, e);
         }
+    }
+
+    private static String[] padOrTrim(String[] src, int size) {
+        String[] out = new String[size];
+        int copy = Math.min(src.length, size);
+        System.arraycopy(src, 0, out, 0, copy);
+        for (int i = copy; i < size; i++) out[i] = "0";
+        return out;
     }
 
     // C4

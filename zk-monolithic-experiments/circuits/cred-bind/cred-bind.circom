@@ -8,6 +8,7 @@ include "./c2/credential-public-key-check.circom";
 //include "./c3/credential-signature-verification.circom";
 include "./c3/credential-signature-verification-optimized.circom";
 include "./c4/blockchain-wallet-key-derivation.circom";
+include "./msg-pk_c-binding/msg-pk_c-binding.circom";
 
 /*
  * EUDI Credential Wallet Binding Circuit

@@ -50,4 +50,4 @@ template BlockchainWalletKeyDerivation () {
     valid <== 1;
 }
 
-component main { public [ pk_0 ] } = BlockchainWalletKeyDerivation();
+component main = BlockchainWalletKeyDerivation();

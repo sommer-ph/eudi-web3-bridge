@@ -27,6 +27,11 @@ public class EudiCredentialService {
     private final EudiCredentialConfigProperties config;
     private final KeyConfigProperties keyConfig;
 
+    // Toggle to switch signing mode without adding a new endpoint.
+    // false = RFC-conform (sign headerB64 "." payloadB64)
+    // true  = ZK-padded (sign fixed-length padded header/payload bytes as used by the circuit)
+    private static final boolean SIGN_ZK_PADDED = false;
+
     public EudiCredential issueCredential(String userId, Map<String, String> attributeValues) {
         log.info("Issue new SD-JWT credential for user: {}", userId);
         try {
@@ -68,11 +73,18 @@ public class EudiCredentialService {
             ObjectMapper mapper = new ObjectMapper();
             String encodedHeader = SignatureUtils.base64url(mapper.writeValueAsBytes(header));
             String encodedPayload = SignatureUtils.base64url(mapper.writeValueAsBytes(payload));
-            String signingInput = encodedHeader + "." + encodedPayload;
 
             Signature signer = Signature.getInstance("SHA256withECDSA");
             signer.initSign(keyService.getIssuerKeyPair().getPrivate());
-            signer.update(signingInput.getBytes(UTF_8));
+            if (SIGN_ZK_PADDED) {
+                // Sign the exact fixed-length byte layout that the circuit hashes
+                byte[] padded = keyService.buildCredentialPaddedSigningInput(header, payload);
+                signer.update(padded);
+            } else {
+                // RFC-conform signing input (Base64url(header) + '.' + Base64url(payload))
+                String signingInput = encodedHeader + "." + encodedPayload;
+                signer.update(signingInput.getBytes(UTF_8));
+            }
             String signature = SignatureUtils.base64url(signer.sign());
 
             EudiCredential credential = new EudiCredential(

@@ -23,8 +23,8 @@ read -rp "Enter user ID: " USER_ID
 CIRCUIT_NAME="cred-bind"
 BUILD_DIR="build"
 INPUT_DIR="input/prepared"
-SRC_FILE="../zk-backend/data/proof-preparation/${USER_ID}-credential-wallet-binding.json"
-DEST_FILE="${INPUT_DIR}/${USER_ID}-credential-wallet-binding.json"
+SRC_FILE="../zk-backend/data/proof-preparation/${USER_ID}-credential-wallet-binding-extended.json"
+DEST_FILE="${INPUT_DIR}/${USER_ID}-credential-wallet-binding-extended.json"
 POT_FILE="../ptau/powersOfTau28_hez_final_22.ptau"
 
 mkdir -p "$INPUT_DIR" "$BUILD_DIR"

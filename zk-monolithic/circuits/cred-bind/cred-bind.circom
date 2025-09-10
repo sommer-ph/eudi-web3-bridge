@@ -8,6 +8,7 @@ include "./c2/credential-public-key-check.circom";
 //include "./c3/credential-signature-verification.circom";
 include "./c3/credential-signature-verification-optimized.circom";
 include "./c4/blockchain-wallet-key-derivation.circom";
+include "./msg-pk_c-binding/msg-pk_c-binding.circom";
 
 template CredentialWalletBinding() {
     // Public inputs
@@ -21,6 +22,20 @@ template CredentialWalletBinding() {
     signal input r[6];
     signal input s[6];
     signal input sk_0[4];
+    
+    // Additional inputs for MsgPkcBinding
+    signal input headerB64[64];
+    signal input headerB64Length;
+    signal input payloadB64[1024]; 
+    signal input payloadB64Length;
+    signal input offXB64;
+    signal input lenXB64;
+    signal input dropX;
+    signal input lenXInner;
+    signal input offYB64;
+    signal input lenYB64;
+    signal input dropY;
+    signal input lenYInner;
 
     // C1: EudiWalletKeyDerivation (pk_c = KeyDer(sk_c))
     component c1 = EudiWalletKeyDerivation();
@@ -67,6 +82,30 @@ template CredentialWalletBinding() {
     for (var i = 0; i < 4; i++) {
         c4.pk_0[0][i] === pk_0[0][i];
         c4.pk_0[1][i] === pk_0[1][i];
+    }
+
+    // MsgPkcBinding: message hash verification and pk_c extraction from JWT
+    component msgPkcBinding = MsgPkcBinding();
+    for (var i = 0; i < 64; i++) {
+        msgPkcBinding.headerB64[i] <== headerB64[i];
+    }
+    msgPkcBinding.headerB64Length <== headerB64Length;
+    for (var i = 0; i < 1024; i++) {
+        msgPkcBinding.payloadB64[i] <== payloadB64[i];
+    }
+    msgPkcBinding.payloadB64Length <== payloadB64Length;
+    msgPkcBinding.offXB64 <== offXB64;
+    msgPkcBinding.lenXB64 <== lenXB64;
+    msgPkcBinding.dropX <== dropX;
+    msgPkcBinding.lenXInner <== lenXInner;
+    msgPkcBinding.offYB64 <== offYB64;
+    msgPkcBinding.lenYB64 <== lenYB64;
+    msgPkcBinding.dropY <== dropY;
+    msgPkcBinding.lenYInner <== lenYInner;
+    for (var i = 0; i < 6; i++) {
+        msgPkcBinding.msghash[i] <== msghash[i];
+        msgPkcBinding.pk_c[0][i] <== pk_c[0][i];
+        msgPkcBinding.pk_c[1][i] <== pk_c[1][i];
     }
 
 }

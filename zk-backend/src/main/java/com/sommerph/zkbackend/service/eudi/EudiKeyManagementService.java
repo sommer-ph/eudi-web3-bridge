@@ -156,6 +156,62 @@ public class EudiKeyManagementService {
         }
     }
 
+    /**
+     * Compute the circuit-style padded message hash limbs.
+     * Message layout (fixed):
+     *   [ headerB64 ASCII (len h) | zeros to 64 ]
+     *   '.' (ASCII 46) at index 64
+     *   [ payloadB64 ASCII (len p) | zeros to 1024 ]
+     * Total message length = 64 + 1 + 1024 bytes (1089 bytes).
+     */
+    public String[] computeCredentialPaddedMsgHashLimbs(Map<String, Object> header, Map<String, Object> payload) {
+        log.info("Compute padded credential message hash limbs");
+        try {
+            byte[] msg = buildCredentialPaddedSigningInput(header, payload);
+            // Hash exact bytes as used by the circuit
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(msg);
+            BigInteger hashInt = new BigInteger(1, hash);
+            return LimbUtils.scalarToLimbsR1(hashInt);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute circuit-padded credential message hash", e);
+        }
+    }
+
+    /**
+     * Build the exact fixed-length byte layout used by the circuit for message hashing.
+     * Layout:
+     *   [ headerB64 ASCII (len h) | zeros to 64 ]
+     *   '.' (ASCII 46) at index 64
+     *   [ payloadB64 ASCII (len p) | zeros to 1024 ]
+     * Total length: 64 + 1 + 1024 bytes.
+     */
+    public byte[] buildCredentialPaddedSigningInput(Map<String, Object> header, Map<String, Object> payload) {
+        try {
+            final int MAX_HEADER = 64;
+            final int MAX_PAYLOAD = 1024;
+            final int MAX_TOTAL = MAX_HEADER + 1 + MAX_PAYLOAD;
+
+            ObjectMapper mapper = new ObjectMapper();
+            String headerB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(header));
+            String payloadB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(payload));
+
+            byte[] headerAscii = headerB64.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+            byte[] payloadAscii = payloadB64.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+
+            byte[] msg = new byte[MAX_TOTAL];
+            // Header region [0..63]
+            System.arraycopy(headerAscii, 0, msg, 0, Math.min(headerAscii.length, MAX_HEADER));
+            // Dot at index 64
+            msg[MAX_HEADER] = 46; // '.'
+            // Payload region starts at 65
+            int payCopy = Math.min(payloadAscii.length, MAX_PAYLOAD);
+            System.arraycopy(payloadAscii, 0, msg, MAX_HEADER + 1, payCopy);
+            return msg;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build padded credential signing input", e);
+        }
+    }
+
     public Map<String, String[]> extractCredentialSignatureLimbs(byte[] derSignature) {
         log.info("Parse credential signature limbs from DER format");
         try {

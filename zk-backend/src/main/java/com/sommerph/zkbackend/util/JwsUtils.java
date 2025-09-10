@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class JwsUtils {
+public class JwsUtils {
 
     private JwsUtils() {}
 
@@ -100,6 +100,25 @@ public final class JwsUtils {
         public static Base64UrlOffsetResult notFound() { return new Base64UrlOffsetResult(-1,-1,-1,-1,false); }
     }
 
+    /** Result for aligned Base64url slice plus inner selection data */
+    public static final class Base64UrlAlignedOffsetResult {
+        public final int offXB64, lenXB64, dropX, lenXInner;
+        public final int offYB64, lenYB64, dropY, lenYInner;
+        public final boolean found;
+        private Base64UrlAlignedOffsetResult(int ox, int lx, int dx, int lix,
+                                             int oy, int ly, int dy, int liy, boolean f) {
+            this.offXB64 = ox; this.lenXB64 = lx; this.dropX = dx; this.lenXInner = lix;
+            this.offYB64 = oy; this.lenYB64 = ly; this.dropY = dy; this.lenYInner = liy; this.found = f;
+        }
+        public static Base64UrlAlignedOffsetResult of(int ox, int lx, int dx, int lix,
+                                                      int oy, int ly, int dy, int liy) {
+            return new Base64UrlAlignedOffsetResult(ox,lx,dx,lix,oy,ly,dy,liy,true);
+        }
+        public static Base64UrlAlignedOffsetResult notFound() {
+            return new Base64UrlAlignedOffsetResult(-1,-1,-1,-1,-1,-1,-1,-1,false);
+        }
+    }
+
     /** L(n) = Length of Base64url output (without padding) for the first n bytes */
     private static int b64UrlLenOfPrefix(int n) {
         int r = n % 3;
@@ -107,85 +126,42 @@ public final class JwsUtils {
     }
 
     /**
-     * Finds x/y offsets directly in Base64url-encoded payload.
-     * Approach: payloadB64 → decode → find JSON offsets → map exactly to Base64url offsets.
-     * (No substring decoding! See comment above.)
+     * Compute aligned Base64 slice for a JSON substring with drop/length hints so that
+     * decoding the slice (with padding) and then dropping `drop` bytes yields exactly the
+     * inner Base64url value bytes (length 43 or 44).
      */
-    public static Base64UrlOffsetResult findJwkXYOffsetsInBase64url(String payloadB64) {
+    public static Base64UrlAlignedOffsetResult findJwkXYOffsetsInBase64urlAligned(String payloadB64) {
         try {
-            // Java decoder may need padding
             String s = payloadB64;
             int mod = s.length() % 4;
             if (mod != 0) s += "===".substring(0, 4 - mod);
 
             byte[] json = Base64.getUrlDecoder().decode(s);
 
-            // Determine JSON offsets of values (only value, without quotes)
             OffsetResult j = findJwkXYOffsets(json);
-            if (!j.found) return Base64UrlOffsetResult.notFound();
+            if (!j.found) return Base64UrlAlignedOffsetResult.notFound();
 
-            // P-256: 43 (occasionally 44) Base64url characters
-            if (j.lenX < 42 || j.lenX > 44 || j.lenY < 42 || j.lenY > 44)
-                return Base64UrlOffsetResult.notFound();
+            int offX = j.offX, lenX = j.lenX; // inner Base64url ascii
+            int offY = j.offY, lenY = j.lenY;
 
-            // Exact mapping byte offset → Base64url offset
-            int offXB64 = b64UrlLenOfPrefix(j.offX);
-            int lenXB64 = b64UrlLenOfPrefix(j.offX + j.lenX) - offXB64;
+            // X alignment
+            int startBlockX = offX / 3;           // 3-byte block index
+            int offXB64 = startBlockX * 4;        // encoded start (aligned)
+            int dropX = offX - startBlockX * 3;   // bytes to drop after decode (0..2)
+            int blocksX = (dropX + lenX + 2) / 3; // ceil((drop+len)/3)
+            int lenXB64 = blocksX * 4;            // encoded length (aligned)
 
-            int offYB64 = b64UrlLenOfPrefix(j.offY);
-            int lenYB64 = b64UrlLenOfPrefix(j.offY + j.lenY) - offYB64;
+            // Y alignment
+            int startBlockY = offY / 3;
+            int offYB64 = startBlockY * 4;
+            int dropY = offY - startBlockY * 3;
+            int blocksY = (dropY + lenY + 2) / 3;
+            int lenYB64 = blocksY * 4;
 
-            return Base64UrlOffsetResult.of(offXB64, lenXB64, offYB64, lenYB64);
+            return Base64UrlAlignedOffsetResult.of(offXB64, lenXB64, dropX, lenX, offYB64, lenYB64, dropY, lenY);
         } catch (Exception e) {
-            return Base64UrlOffsetResult.notFound();
+            return Base64UrlAlignedOffsetResult.notFound();
         }
     }
 
-    /**
-     * Validates the calculation: we decode ONCE completely, read x/y from JSON,
-     * and check that their lengths are plausible. No decoding of substrings needed.
-     */
-    public static void validateBase64urlCoordinates(
-            String payloadB64,
-            Base64UrlOffsetResult off,
-            Map<String, Object> originalPayload
-    ) {
-        try {
-            if (off == null || !off.found) throw new IllegalStateException("Offset result not found");
-
-            // Original x/y from payload map (source of truth)
-            @SuppressWarnings("unchecked")
-            Map<String, Object> jwk = (Map<String, Object>) ((Map<?, ?>) originalPayload.get("cnf")).get("jwk");
-            String xOrig = (String) jwk.get("x");
-            String yOrig = (String) jwk.get("y");
-            if (xOrig == null || yOrig == null) throw new IllegalStateException("Missing x/y in payload");
-
-            if (!isValidBase64UrlAscii(xOrig) || !isValidBase64UrlAscii(yOrig))
-                throw new IllegalStateException("x/y not Base64url ASCII");
-
-            if (xOrig.length() < 42 || xOrig.length() > 44 || yOrig.length() < 42 || yOrig.length() > 44)
-                throw new IllegalStateException("Unexpected x/y length");
-
-            // Additional plausibility check: length mapping consistent?
-            // (With correct formula: lenB64 == L(off+len) - L(off))
-            // Here it's sufficient that we used the formula exactly as such – nothing more to do.
-
-        } catch (Exception e) {
-            throw new IllegalStateException("Base64url coordinate validation failed: " + e.getMessage(), e);
-        }
-    }
-
-    /** Legacy API – please do not use anymore. */
-    @Deprecated
-    public static OffsetResult findJwkXYOffsetsInBase64Url(String payloadB64) {
-        try {
-            String s = payloadB64;
-            int mod = s.length() % 4;
-            if (mod != 0) s += "===".substring(0, 4 - mod);
-            byte[] json = Base64.getUrlDecoder().decode(s);
-            return findJwkXYOffsets(json);
-        } catch (Exception e) {
-            return OffsetResult.notFound();
-        }
-    }
 }

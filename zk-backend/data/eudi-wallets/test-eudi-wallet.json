@@ -1,7 +1,7 @@
 {
   "userId" : "test",
-  "base64SecretKey" : "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgxP/1uSCqU2WFeR5VsqF1AdjQrQCgy0fO/pd0ZQunxxigCgYIKoZIzj0DAQehRANCAAS4YdEXP7Jut6eaqWL9PwbNINlCBD8iDxUPOBWVpGyW8pWaTAfa2rruJ/F97oI6eDV5Qd2V28aspA4OHhlCxF7Z",
-  "base64PublicKey" : "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEuGHRFz+ybrenmqli/T8GzSDZQgQ/Ig8VDzgVlaRslvKVmkwH2tq67ifxfe6COng1eUHdldvGrKQODh4ZQsRe2Q==",
+  "base64SecretKey" : "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYPdg9XwCW1gkrKvJV3Y3WPs7dUzw1Rky/hR0XnAVMkOgCgYIKoZIzj0DAQehRANCAAQOcD3EodjtomDlcNZI/7+k86XU7F554M3XyQsxw0aCslXAb4dzrYlTFEHI/+AcD9Gq2mFB5Fc0jdqVGB9xANoF",
+  "base64PublicKey" : "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDnA9xKHY7aJg5XDWSP+/pPOl1OxeeeDN18kLMcNGgrJVwG+Hc62JUxRByP/gHA/RqtphQeRXNI3alRgfcQDaBQ==",
   "credentials" : [ {
     "header" : {
       "alg" : "ES256",
@@ -10,40 +10,40 @@
     "payload" : {
       "iss" : "issuer:123",
       "sub" : "subject:test",
-      "iat" : 1757144205,
-      "exp" : 1757147805,
+      "iat" : 1757605592,
+      "exp" : 1757609192,
       "_sd_alg" : "sha-256",
-      "_sd" : [ "tZml2qGtKlYYvaAeAWTwlTFU0qKihojoM2-LCmyUANs", "jSNLoMmN3F1Z3aK6ZgfKEGJ5b9FlYMWervx6p30Z2JE", "XgLvGxx16oVLaVH2bDMN_4cyCCFzVZbM9fy8oquY7Ns", "24y_lwxKCUuNil_PXD8WELLJasX6KvcxHyhOGtl61Kc", "rmiIGNNGOnzNCIosYsNK71tr9mgaNEu0rR-g2-D4ejk" ],
+      "_sd" : [ "YzSGVLoClXCVupUPTbmOYFgLL4-wVrJvcl3yxzSp8IQ", "xUXSrdJ_8JBvmTD3CVnF87UubD3yGjcYLTjl7ztCC88", "UUy72clAvrkmavD8dXlt9ZMBCa19GNY2e9nKNZmDxUU", "QOMpvaG7h0e0fT4IcGiAmftRXgCMM-idUqfznQqsB6w", "sQC4w53LRJ1Hr5uX5IbpnCVEV-xHbdL9spNf0yOHcHI" ],
       "cnf" : {
         "jwk" : {
-          "x" : "ALhh0Rc_sm63p5qpYv0_Bs0g2UIEPyIPFQ84FZWkbJby",
+          "x" : "DnA9xKHY7aJg5XDWSP-_pPOl1OxeeeDN18kLMcNGgrI",
           "kty" : "EC",
           "crv" : "P-256",
-          "y" : "AJWaTAfa2rruJ_F97oI6eDV5Qd2V28aspA4OHhlCxF7Z"
+          "y" : "VcBvh3OtiVMUQcj_4BwP0araYUHkVzSN2pUYH3EA2gU"
         }
       }
     },
-    "signature" : "MEYCIQCtCdBlzRJT76iE7sbkknwuWqheCynerfIQDJqFrapbjAIhAPc5a2FCgVaHFqj-K7OMst3Pb50qoMdgdLRbJ-qiGhgZ",
+    "signature" : "MEUCIQCoXTV5rWudX3WpQzPLf7jpEnw-5nb1Y0MHGACgQqtCHgIgVG1Z8Ej7qzFy-yt6DbPrXE8yesmv3weLUPuJe1YJarw",
     "disclosures" : [ {
+      "value" : "12345678",
       "key" : "documentNumber",
-      "salt" : "dac7dcbb-ad9f-4eb1-9ecd-ee68785f592c",
-      "value" : "12345678"
+      "salt" : "629379f4-02b0-4d02-a1f0-af70d4b8b34f"
     }, {
+      "value" : "Mustermann",
       "key" : "name",
-      "salt" : "a6445572-ce43-4275-b690-ab005fb1087c",
-      "value" : "Mustermann"
+      "salt" : "4af7ca83-ee44-46b3-864b-80e2b089c48c"
     }, {
+      "value" : "Philipp",
       "key" : "givenName",
-      "salt" : "b8248573-0dce-457b-84b5-c918fcf5b29c",
-      "value" : "Philipp"
+      "salt" : "8007f56a-34ee-4069-957c-2e11d042468e"
     }, {
+      "value" : "1990-01-01",
       "key" : "dateOfBirth",
-      "salt" : "ee8ecd1f-2e77-4194-8a96-234742d3d87f",
-      "value" : "1990-01-01"
+      "salt" : "4a72679e-4d7f-4fe0-bf71-b709878b718f"
     }, {
+      "value" : "DE",
       "key" : "nationality",
-      "salt" : "04059b1c-8888-4930-8e62-ddfe963e40c6",
-      "value" : "DE"
+      "salt" : "5f505305-661b-41bc-9729-0e55991bb752"
     } ]
   } ]
 }

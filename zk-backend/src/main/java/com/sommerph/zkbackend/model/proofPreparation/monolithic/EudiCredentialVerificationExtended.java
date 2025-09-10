@@ -23,10 +23,14 @@ public class EudiCredentialVerificationExtended {
     private String[] payloadB64;       // Base64url payload as ASCII bytes (for SHA-256)
     private String payloadB64Length;   // actual length of Base64url payload
     
-    // Base64url coordinate offsets (for efficient circuit processing)
-    private String offXB64;            // start offset of x coordinate in Base64url payload
-    private String lenXB64;            // length of x coordinate Base64url string (44 chars)
-    private String offYB64;            // start offset of y coordinate in Base64url payload
-    private String lenYB64;            // length of y coordinate Base64url string (44 chars)
+    // Base64url coordinate slice (aligned) + inner selection for efficient circuit processing
+    private String offXB64;            // aligned start offset in Base64url payload
+    private String lenXB64;            // aligned length (multiple of 4, <=64)
+    private String dropX;              // bytes to drop from decoded outer before inner
+    private String lenXInner;          // inner Base64url ASCII length (43 or 44)
+    private String offYB64;            // aligned start offset in Base64url payload
+    private String lenYB64;            // aligned length (multiple of 4, <=64)
+    private String dropY;              // bytes to drop from decoded outer before inner
+    private String lenYInner;          // inner Base64url ASCII length (43 or 44)
 
 }
