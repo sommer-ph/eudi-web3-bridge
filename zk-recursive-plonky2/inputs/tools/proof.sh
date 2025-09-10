@@ -33,13 +33,14 @@ fi
 echo
 echo "Available proof modes:"
 echo "  normal     - Run inner + outer proofs"
-echo "  multi-step - Run multi-step recursion"
+echo "  serial     - Run serial recursion"
+echo "  parallel   - Run parallel recursion"
 echo
-read -rp "Enter proof mode (normal/multi-step) [normal]: " PROOF_MODE
+read -rp "Enter proof mode (normal/serial/parallel) [normal]: " PROOF_MODE
 PROOF_MODE=${PROOF_MODE:-normal}
 
-if [[ "$PROOF_MODE" != "normal" && "$PROOF_MODE" != "multi-step" ]]; then
-    echo "Error: Invalid proof mode. Use 'normal' or 'multi-step'." >&2
+if [[ "$PROOF_MODE" != "normal" && "$PROOF_MODE" != "serial" && "$PROOF_MODE" != "parallel" ]]; then
+    echo "Error: Invalid proof mode. Use 'normal', 'serial', or 'parallel'." >&2
     exit 1
 fi
 
@@ -96,8 +97,10 @@ echo "Mode: $PROOF_MODE, Derivation: $DERIVE_MODE"
 echo
 
 # Set cargo command based on proof mode
-if [[ "$PROOF_MODE" == "multi-step" ]]; then
-    CARGO_CMD="cargo run --release --bin zk-recursive -- multi-step --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
+if [[ "$PROOF_MODE" == "serial" ]]; then
+    CARGO_CMD="cargo run --release --bin zk-recursive -- serial --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
+elif [[ "$PROOF_MODE" == "parallel" ]]; then
+    CARGO_CMD="cargo run --release --bin zk-recursive -- parallel --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
 else
     CARGO_CMD="cargo run --release --bin zk-recursive -- outer --input $DEST_FILE --inner-sig-mode static --outer-derive-mode $DERIVE_MODE"
 fi

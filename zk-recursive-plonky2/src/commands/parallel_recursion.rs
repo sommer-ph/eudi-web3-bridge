@@ -1,4 +1,4 @@
-//! Multi-step recursive proof generation command.
+//! Parallel recursive proof generation command.
 
 use anyhow::Result;
 use log::Level;
@@ -14,7 +14,7 @@ use plonky2_ecdsa::field::p256_scalar::P256Scalar;
 
 use crate::types::input::{FullInput, SignatureMode, DerivationMode};
 use crate::utils::parsing::{hex_to_bigint, hex_to_fixed_be_bytes, set_bytes_as_bits_be, set_u32_be_bits_non_hardened};
-use crate::circuits::multi_step_recursion::{
+use crate::circuits::parallel_recursion::{
     c1_2::{build_c1_2_circuit, C1_2Circuit},
     c3::{build_c3_circuit, C3Circuit},
     c4::{build_c4_circuit, C4Circuit},
@@ -41,48 +41,48 @@ fn cc_hex_to_field_elements(cc_hex: &str) -> [F; 8] {
     out
 }
 
-/// Multi-step recursive circuits container
-pub struct MultiStepCircuits {
+/// Parallel recursive circuits container
+pub struct ParallelCircuits {
     pub c1_2: C1_2Circuit,
     pub c3: C3Circuit,
     pub c4: C4Circuit,
     pub c5: C5Circuit,
 }
 
-/// Build all multi-step recursive circuits
-pub fn build_multi_step_circuits(signature_mode: SignatureMode, derivation_mode: DerivationMode) -> MultiStepCircuits {
-    println!("Building multi-step recursive circuits...");
+/// Build all parallel recursive circuits
+pub fn build_parallel_circuits(signature_mode: SignatureMode, derivation_mode: DerivationMode) -> ParallelCircuits {
+    println!("Building parallel recursive circuits...");
     let total_start = Instant::now();
     
-    // Build circuits sequentially (each depends on the previous one)
+    // Build circuits independently (no dependencies between c1_2, c3, c4)
     println!("Building C1_2 circuit (EUDI Key Derivation)...");
     let c1_2_start = Instant::now();
     let c1_2 = build_c1_2_circuit();
     println!("C1_2 circuit built in {:?} ({} gates)", c1_2_start.elapsed(), c1_2.data.common.degree());
     
-    println!("Building C3 circuit (Signature Verification + C1_2 recursive)...");
+    println!("Building C3 circuit (Signature Verification)...");
     let c3_start = Instant::now();
-    let c3 = build_c3_circuit(&c1_2.data.common, signature_mode);
+    let c3 = build_c3_circuit(signature_mode);
     println!("C3 circuit built in {:?} ({} gates)", c3_start.elapsed(), c3.data.common.degree());
     
-    println!("Building C4 circuit (Secp256k1 Key Derivation + C3 recursive)...");
+    println!("Building C4 circuit (Secp256k1 Key Derivation)...");
     let c4_start = Instant::now();
-    let c4 = build_c4_circuit(&c3.data.common);
+    let c4 = build_c4_circuit();
     println!("C4 circuit built in {:?} ({} gates)", c4_start.elapsed(), c4.data.common.degree());
     
-    println!("Building C5 circuit (BIP32 Key Derivation + C4 recursive) with {:?} derivation mode...", derivation_mode);
+    println!("Building C5 circuit (BIP32 Key Derivation + recursive verification of c1_2, c3, c4) with {:?} derivation mode...", derivation_mode);
     let c5_start = Instant::now();
-    let c5 = build_c5_circuit_optimized(&c4.data.common, derivation_mode.clone());
+    let c5 = build_c5_circuit_optimized(&c1_2.data.common, &c3.data.common, &c4.data.common, derivation_mode.clone());
     println!("C5 circuit built in {:?} ({} gates)", c5_start.elapsed(), c5.data.common.degree());
     
-    println!("All multi-step circuits built in {:?}", total_start.elapsed());
+    println!("All parallel circuits built in {:?}", total_start.elapsed());
     
-    MultiStepCircuits { c1_2, c3, c4, c5 }
+    ParallelCircuits { c1_2, c3, c4, c5 }
 }
 
-/// Generate multi-step recursive proof
-pub fn generate_multi_step_recursive_proof(
-    circuits: &MultiStepCircuits,
+/// Generate parallel recursive proof  
+pub fn generate_parallel_recursive_proof(
+    circuits: &ParallelCircuits,
     input_file: &str,
     build_dir: &Path,
 ) -> Result<()> {
@@ -93,28 +93,26 @@ pub fn generate_multi_step_recursive_proof(
         SignatureMode::Dynamic => "DYNAMIC PK",
     };
     
-    println!("=== MULTI-STEP RECURSIVE PROOF GENERATION ({}) ===", signature_mode_str);
+    println!("=== PARALLEL RECURSIVE PROOF GENERATION ({}) ===", signature_mode_str);
     
     // Load input data
     println!("Loading input data from: {}", input_file);
     let input_data = fs::read_to_string(input_file)?;
     let input: FullInput = serde_json::from_str(&input_data)?;
     
-    // === STEP 1: Generate C1_2 Proof ===
-    println!("\n=== STEP 1: C1_2 PROOF (EUDI Key Derivation) ===");
+    // === PARALLEL STEPS: Generate C1_2, C3, C4 Proofs ===
+    println!("\n=== PARALLEL STEP: C1_2 PROOF (EUDI Key Derivation) ===");
     let c1_2_proof = generate_c1_2_proof(&circuits.c1_2, &input, build_dir)?;
     
-    // === STEP 2: Generate C3 Proof ===
-    println!("\n=== STEP 2: C3 PROOF (Signature Verification + C1_2 Recursive) ===");
-    let c3_proof = generate_c3_proof(&circuits.c3, &circuits.c1_2, &input, &c1_2_proof, build_dir)?;
+    println!("\n=== PARALLEL STEP: C3 PROOF (Signature Verification) ===");
+    let c3_proof = generate_c3_proof(&circuits.c3, &input, build_dir)?;
     
-    // === STEP 3: Generate C4 Proof ===
-    println!("\n=== STEP 3: C4 PROOF (Secp256k1 Key Derivation + C3 Recursive) ===");
-    let c4_proof = generate_c4_proof(&circuits.c4, &circuits.c3, &input, &c3_proof, build_dir)?;
+    println!("\n=== PARALLEL STEP: C4 PROOF (Secp256k1 Key Derivation) ===");
+    let c4_proof = generate_c4_proof(&circuits.c4, &input, build_dir)?;
     
-    // === STEP 4: Generate C5 Proof (Final) ===
-    println!("\n=== STEP 4: C5 PROOF (BIP32 Key Derivation + C4 Recursive) ===");
-    let c5_proof = generate_c5_proof(&circuits.c5, &circuits.c4, &input, &c4_proof, build_dir)?;
+    // === FINAL STEP: Generate C5 Proof ===
+    println!("\n=== FINAL STEP: C5 PROOF (BIP32 Key Derivation + Recursive Verification of c1_2, c3, c4) ===");
+    let c5_proof = generate_c5_proof(&circuits.c5, &circuits.c1_2, &circuits.c3, &circuits.c4, &input, &c1_2_proof, &c3_proof, &c4_proof, build_dir)?;
     
     // Verify final proof
     println!("Verifying final C5 proof...");
@@ -123,26 +121,26 @@ pub fn generate_multi_step_recursive_proof(
     println!("Final proof verification time: {:?}", verify_start.elapsed());
     
     // Save final proof artifacts
-    println!("Saving final multi-step proof artifacts...");
+    println!("Saving final parallel proof artifacts...");
     
     // Save proof
     let final_proof_data = bincode::serialize(&c5_proof)?;
-    fs::write(build_dir.join("multi_step_proof.bin"), &final_proof_data)?;
+    fs::write(build_dir.join("parallel_proof.bin"), &final_proof_data)?;
     println!("Final proof saved: {} bytes", final_proof_data.len());
     
     // Save verifier data
     let verifier_data = bincode::serialize(&circuits.c5.data.verifier_only)?;
-    fs::write(build_dir.join("multi_step_verifier.bin"), &verifier_data)?;
+    fs::write(build_dir.join("parallel_verifier.bin"), &verifier_data)?;
     println!("Final verifier data saved: {} bytes", verifier_data.len());
     
     // Save common circuit data
     let common_data = bincode::serialize(&circuits.c5.data.common)?;
-    fs::write(build_dir.join("multi_step_common.bin"), &common_data)?;
+    fs::write(build_dir.join("parallel_common.bin"), &common_data)?;
     println!("Final common data saved: {} bytes", common_data.len());
     
     println!("\n=== PERFORMANCE SUMMARY ===");
-    println!("Total multi-step recursive proof time: {:?}", total_start.elapsed());
-    println!("=== MULTI-STEP RECURSIVE PROOF COMPLETE ({}) ===", signature_mode_str);
+    println!("Total parallel recursive proof time: {:?}", total_start.elapsed());
+    println!("=== PARALLEL RECURSIVE PROOF COMPLETE ({}) ===", signature_mode_str);
     
     Ok(())
 }
@@ -196,12 +194,10 @@ fn generate_c1_2_proof(
     Ok(proof)
 }
 
-/// Generate C3 proof (Signature Verification + C1_2 Recursive)
+/// Generate C3 proof (Signature Verification)
 fn generate_c3_proof(
     circuit: &C3Circuit,
-    c1_2_circuit: &C1_2Circuit,
     input: &FullInput,
-    c1_2_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
     println!("Setting up C3 witness...");
@@ -216,10 +212,6 @@ fn generate_c3_proof(
     let sig_s = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.s));
     
     let mut pw = PartialWitness::<F>::new();
-    
-    // Set recursive proof
-    pw.set_proof_with_pis_target(&circuit.targets.c1_2_proof, c1_2_proof)?;
-    pw.set_verifier_data_target(&circuit.targets.c1_2_vd, &c1_2_circuit.data.verifier_only)?;
     
     // Set public input: pk_issuer
     pw.set_biguint_target(&circuit.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
@@ -256,12 +248,10 @@ fn generate_c3_proof(
     Ok(proof)
 }
 
-/// Generate C4 proof (Secp256k1 Key Derivation + C3 Recursive)
+/// Generate C4 proof (Secp256k1 Key Derivation)
 fn generate_c4_proof(
     circuit: &C4Circuit,
-    c3_circuit: &C3Circuit,
     input: &FullInput,
-    c3_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
     println!("Setting up C4 witness...");
@@ -273,10 +263,6 @@ fn generate_c4_proof(
     let sk_0 = Secp256K1Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_0));
     
     let mut pw = PartialWitness::<F>::new();
-    
-    // Set recursive proof
-    pw.set_proof_with_pis_target(&circuit.targets.c3_proof, c3_proof)?;
-    pw.set_verifier_data_target(&circuit.targets.c3_vd, &c3_circuit.data.verifier_only)?;
     
     // Set public input: pk_0
     pw.set_biguint_target(&circuit.targets.pk_0.x.value, &pk_0_x.to_canonical_biguint())?;
@@ -311,11 +297,15 @@ fn generate_c4_proof(
     Ok(proof)
 }
 
-/// Generate C5 proof (BIP32 Key Derivation + C4 Recursive)
+/// Generate C5 proof (BIP32 Key Derivation + Recursive Verification of c1_2, c3, c4)
 fn generate_c5_proof(
     circuit: &C5Circuit,
+    c1_2_circuit: &C1_2Circuit,
+    c3_circuit: &C3Circuit,
     c4_circuit: &C4Circuit,
     input: &FullInput,
+    c1_2_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
+    c3_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     c4_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
@@ -343,7 +333,11 @@ fn generate_c5_proof(
     
     let mut pw = PartialWitness::<F>::new();
     
-    // Set recursive proof
+    // Set recursive proofs for all 3 circuits
+    pw.set_proof_with_pis_target(&circuit.targets.c1_2_proof, c1_2_proof)?;
+    pw.set_verifier_data_target(&circuit.targets.c1_2_vd, &c1_2_circuit.data.verifier_only)?;
+    pw.set_proof_with_pis_target(&circuit.targets.c3_proof, c3_proof)?;
+    pw.set_verifier_data_target(&circuit.targets.c3_vd, &c3_circuit.data.verifier_only)?;
     pw.set_proof_with_pis_target(&circuit.targets.c4_proof, c4_proof)?;
     pw.set_verifier_data_target(&circuit.targets.c4_vd, &c4_circuit.data.verifier_only)?;
     

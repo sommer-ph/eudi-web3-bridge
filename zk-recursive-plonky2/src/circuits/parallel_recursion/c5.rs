@@ -22,9 +22,13 @@ pub enum C5KeyDerivationTargets {
     Poseidon(PoseidonKeyDerivationTargets),
 }
 
-/// Targets for the C5 circuit (Key Derivation + C4 recursive verification).
+/// Targets for the C5 circuit (Key Derivation + recursive verification of c1_2, c3, c4).
 pub struct C5CircuitTargets {
-    // Recursive verification targets
+    // Recursive verification targets for all 3 circuits
+    pub c1_2_proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
+    pub c1_2_vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
+    pub c3_proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
+    pub c3_vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
     pub c4_proof: plonky2::plonk::proof::ProofWithPublicInputsTarget<D>,
     pub c4_vd: plonky2::plonk::circuit_data::VerifierCircuitTarget,
     
@@ -32,7 +36,7 @@ pub struct C5CircuitTargets {
     pub key_derivation_targets: C5KeyDerivationTargets,
 }
 
-/// C5 circuit that implements C5 (BIP32 Key Derivation) + recursive verification of C4.
+/// C5 circuit that implements C5 (BIP32 Key Derivation) + recursive verification of c1_2, c3, c4.
 pub struct C5Circuit {
     pub data: CircuitData<F, Cfg, D>,
     pub targets: C5CircuitTargets,
@@ -40,9 +44,11 @@ pub struct C5Circuit {
 }
 
 /// Build the C5 circuit implementing:
-/// - Recursive verification of C4 proof
+/// - Recursive verification of c1_2, c3, c4 proofs
 /// - C5: BIP32 non-hardened key derivation: pk_i = KeyDer(pk_0, cc_0, i)
 pub fn build_c5_circuit(
+    c1_2_common: &CommonCircuitData<F, D>,
+    c3_common: &CommonCircuitData<F, D>,
     c4_common: &CommonCircuitData<F, D>,
     derivation_mode: DerivationMode,
 ) -> C5Circuit {
@@ -52,7 +58,15 @@ pub fn build_c5_circuit(
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // === Recursive Proof Verification ===
-    // Add targets for the proof of the C4 circuit and verify it recursively
+    // Add targets and verify all 3 circuits in parallel
+    let c1_2_proof = builder.add_virtual_proof_with_pis(c1_2_common);
+    let c1_2_vd = builder.add_virtual_verifier_data(c1_2_common.config.fri_config.cap_height);
+    builder.verify_proof::<Cfg>(&c1_2_proof, &c1_2_vd, c1_2_common);
+    
+    let c3_proof = builder.add_virtual_proof_with_pis(c3_common);
+    let c3_vd = builder.add_virtual_verifier_data(c3_common.config.fri_config.cap_height);
+    builder.verify_proof::<Cfg>(&c3_proof, &c3_vd, c3_common);
+    
     let c4_proof = builder.add_virtual_proof_with_pis(c4_common);
     let c4_vd = builder.add_virtual_verifier_data(c4_common.config.fri_config.cap_height);
     builder.verify_proof::<Cfg>(&c4_proof, &c4_vd, c4_common);
@@ -152,6 +166,10 @@ pub fn build_c5_circuit(
 
     let data = builder.build::<Cfg>();
     let targets = C5CircuitTargets {
+        c1_2_proof,
+        c1_2_vd,
+        c3_proof,
+        c3_vd,
         c4_proof,
         c4_vd,
         key_derivation_targets,
@@ -161,55 +179,60 @@ pub fn build_c5_circuit(
 }
 
 /// Build the C5 circuit with the specified derivation mode.
-pub fn build_c5_circuit_optimized(c4_common: &CommonCircuitData<F, D>, derivation_mode: DerivationMode) -> C5Circuit {
-    build_c5_circuit(c4_common, derivation_mode)
+pub fn build_c5_circuit_optimized(
+    c1_2_common: &CommonCircuitData<F, D>,
+    c3_common: &CommonCircuitData<F, D>,
+    c4_common: &CommonCircuitData<F, D>,
+    derivation_mode: DerivationMode
+) -> C5Circuit {
+    build_c5_circuit(c1_2_common, c3_common, c4_common, derivation_mode)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuits::multi_step_recursion::c1_2::build_c1_2_circuit;
-    use crate::circuits::multi_step_recursion::c3::build_c3_circuit;
-    use crate::circuits::multi_step_recursion::c4::build_c4_circuit;
+    use crate::circuits::parallel_recursion::c1_2::build_c1_2_circuit;
+    use crate::circuits::parallel_recursion::c3::build_c3_circuit;
+    use crate::circuits::parallel_recursion::c4::build_c4_circuit;
     use crate::types::input::SignatureMode;
     
     #[test]
-    fn test_build_c5_circuit_with_static_chain_sha512() {
+    fn test_build_c5_circuit_with_static_parallel_sha512() {
         let c1_2_circuit = build_c1_2_circuit();
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
-        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
-        println!("C5 circuit (static chain, SHA512) built successfully");
+        let c3_circuit = build_c3_circuit(SignatureMode::Static);
+        let c4_circuit = build_c4_circuit();
+        let c5_circuit = build_c5_circuit_optimized(&c1_2_circuit.data.common, &c3_circuit.data.common, &c4_circuit.data.common, DerivationMode::Sha512);
+        println!("C5 circuit (static parallel, SHA512) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
     
     #[test]
-    fn test_build_c5_circuit_with_static_chain_poseidon() {
+    fn test_build_c5_circuit_with_static_parallel_poseidon() {
         let c1_2_circuit = build_c1_2_circuit();
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
-        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
-        println!("C5 circuit (static chain, Poseidon) built successfully");
+        let c3_circuit = build_c3_circuit(SignatureMode::Static);
+        let c4_circuit = build_c4_circuit();
+        let c5_circuit = build_c5_circuit_optimized(&c1_2_circuit.data.common, &c3_circuit.data.common, &c4_circuit.data.common, DerivationMode::Poseidon);
+        println!("C5 circuit (static parallel, Poseidon) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
     
     #[test]
-    fn test_build_c5_circuit_with_dynamic_chain_sha512() {
+    fn test_build_c5_circuit_with_dynamic_parallel_sha512() {
         let c1_2_circuit = build_c1_2_circuit();
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
-        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
-        println!("C5 circuit (dynamic chain, SHA512) built successfully");
+        let c3_circuit = build_c3_circuit(SignatureMode::Dynamic);
+        let c4_circuit = build_c4_circuit();
+        let c5_circuit = build_c5_circuit_optimized(&c1_2_circuit.data.common, &c3_circuit.data.common, &c4_circuit.data.common, DerivationMode::Sha512);
+        println!("C5 circuit (dynamic parallel, SHA512) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
     
     #[test]
-    fn test_build_c5_circuit_with_dynamic_chain_poseidon() {
+    fn test_build_c5_circuit_with_dynamic_parallel_poseidon() {
         let c1_2_circuit = build_c1_2_circuit();
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
-        let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
-        let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
-        println!("C5 circuit (dynamic chain, Poseidon) built successfully");
+        let c3_circuit = build_c3_circuit(SignatureMode::Dynamic);
+        let c4_circuit = build_c4_circuit();
+        let c5_circuit = build_c5_circuit_optimized(&c1_2_circuit.data.common, &c3_circuit.data.common, &c4_circuit.data.common, DerivationMode::Poseidon);
+        println!("C5 circuit (dynamic parallel, Poseidon) built successfully");
         println!("Circuit size: {} gates", c5_circuit.data.common.degree());
     }
 }

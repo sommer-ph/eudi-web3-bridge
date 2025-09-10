@@ -78,8 +78,8 @@ pub fn build_c4_circuit(c3_common: &CommonCircuitData<F, D>) -> C4Circuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuits::multi_step_recursion::c1_2::build_c1_2_circuit;
-    use crate::circuits::multi_step_recursion::c3::build_c3_circuit;
+    use crate::circuits::serial_recursion::c1_2::build_c1_2_circuit;
+    use crate::circuits::serial_recursion::c3::build_c3_circuit;
     use crate::types::input::SignatureMode;
     
     #[test]

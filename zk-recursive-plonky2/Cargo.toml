@@ -11,9 +11,6 @@ path = "src/lib.rs"
 name = "zk-recursive"
 path = "src/main.rs"
 
-[[bin]]
-name = "generate"
-path = "inputs/tools/generate.rs"
 
 [[bin]]
 name = "generate_poseidon"
