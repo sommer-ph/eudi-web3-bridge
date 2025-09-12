@@ -3,6 +3,7 @@ package com.sommerph.zkbackend.service;
 import com.sommerph.zkbackend.model.eudi.EudiWallet;
 import com.sommerph.zkbackend.model.eudi.EudiCredential;
 import com.sommerph.zkbackend.model.blockchain.BlockchainWallet;
+import com.sommerph.zkbackend.config.EudiCredentialConfigProperties;
 import com.sommerph.zkbackend.model.proofPreparation.monolithic.*;
 import com.sommerph.zkbackend.model.proofPreparation.recursive.*;
 import com.sommerph.zkbackend.repository.proofPreparation.ProofPreparationRegistry;
@@ -36,6 +37,7 @@ public class ProofPreparationService {
     private final BlockchainKeyManagementService blockchainKeyManagementService;
     private final ProofPreparationRegistry proofPreparationRegistry;
     private final ExportUtils exportUtils;
+    private final EudiCredentialConfigProperties eudiCredentialConfig;
     
     @Value("${proof.extended.computeOffsets:true}")
     private boolean computeOffsets;
@@ -126,10 +128,18 @@ public class ProofPreparationService {
             EudiCredential credential = wallet.getCredentials().get(0);
 
             String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
-            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
-                    credential.getHeader(),
-                    credential.getPayload()
-            );
+            String[] msgHashLimbs;
+            if (eudiCredentialConfig.isSigningInputPadded()) {
+                msgHashLimbs = eudiKeyManagementService.computeCredentialPaddedMsgHashLimbs(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            } else {
+                msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            }
             Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
                     java.util.Base64.getUrlDecoder().decode(credential.getSignature())
             );
@@ -172,9 +182,15 @@ public class ProofPreparationService {
 
             // Get existing limb data
             String[][] pkILimbs = eudiKeyManagementService.getIssuerPublicKeyLimbs();
-            // Use circuit-style padded hash to match circuit’s fixed-length message layout
-            String[] msgHashLimbs = eudiKeyManagementService.computeCredentialPaddedMsgHashLimbs(
-                    credential.getHeader(), credential.getPayload());
+            // Use hash method consistent with credential signing configuration
+            String[] msgHashLimbs;
+            if (eudiCredentialConfig.isSigningInputPadded()) {
+                msgHashLimbs = eudiKeyManagementService.computeCredentialPaddedMsgHashLimbs(
+                        credential.getHeader(), credential.getPayload());
+            } else {
+                msgHashLimbs = eudiKeyManagementService.computeCredentialMsgHashLimbs(
+                        credential.getHeader(), credential.getPayload());
+            }
             Map<String, String[]> sigLimbs = eudiKeyManagementService.extractCredentialSignatureLimbs(
                     Base64.getUrlDecoder().decode(credential.getSignature()));
 
@@ -305,11 +321,19 @@ public class ProofPreparationService {
                     pkIssuerHex.get("y")
             );
 
-            // Extract message hash (msg)
-            String msg = eudiKeyManagementService.getCredentialMsgHashHex(
-                    credential.getHeader(),
-                    credential.getPayload()
-            );
+            // Extract message hash (msg) - use hash method consistent with credential signing configuration
+            String msg;
+            if (eudiCredentialConfig.isSigningInputPadded()) {
+                msg = eudiKeyManagementService.getCredentialPaddedMsgHashHex(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            } else {
+                msg = eudiKeyManagementService.getCredentialMsgHashHex(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            }
 
             // Extract signature
             Map<String, String> signatureHex = eudiKeyManagementService.extractCredentialSignatureHex(

@@ -1,13 +1,13 @@
 {
   "userId" : "test",
-  "mnemonic" : "fold blue business execute festival screen shock day attitude lift appear truck",
-  "base64MasterPublicKey" : "A1mLpv8VHxdTzzAgpOMFVCmCZG1ChbjvpIy5s0fv+ChD",
-  "base64MasterSecretKey" : "yqxP0HZD2i51ZfiXgVtisMAC5q0wYucQcu5qsbhxzHE=",
-  "base64MasterChainCode" : "yg9OiH34v5PNwV0aNshe2cXv6zqJo2TS7aAp8ADvI+A=",
+  "mnemonic" : "cross brick energy tribe ghost hammer mean fury diagram short ball demand",
+  "base64MasterPublicKey" : "AxyhdC5A1wiJ9CvEhEhT3vponFVspx16jKxiudoSxlyk",
+  "base64MasterSecretKey" : "fd8GxJsOMkVvr4AQAdabSJ+5whqZ5tzTzhaJM9Ix+iI=",
+  "base64MasterChainCode" : "ZCwB40dnMNbuVOHTAJy9eJ/YXSpwCH7BRLbzdqi40go=",
   "childKeys" : [ {
-    "publicKeyBase64" : "A84aM7kLdjQOutbTHu1CpYSq0FiJv3xUblJIBNGsUmxb",
-    "secretKeyBase64" : "pYwGscgTJymhEPbIgHpt6gLy8eJeLG4A8OmRKhUHd20=",
-    "chainCodeBase64" : "MNyGVv3JaBJZWf8wBfeyCzCGD/HWE4yeJz4HN/E0VU8=",
+    "publicKeyBase64" : "A+FFfm1cQ93sSHQ29Fpb14tTfAtODhaim97rBHD8XQq3",
+    "secretKeyBase64" : "Hm4VNPk+xb07m+coeAVRW/IPAnUTVzXvy6y3X374Azs=",
+    "chainCodeBase64" : "v/c+LLgXVu+rMFoY60EJ8rJZw+91Jko7N7UW8r/6on0=",
     "derivationIndex" : 0
   } ]
 }

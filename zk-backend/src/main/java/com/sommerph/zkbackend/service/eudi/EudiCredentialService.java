@@ -27,10 +27,7 @@ public class EudiCredentialService {
     private final EudiCredentialConfigProperties config;
     private final KeyConfigProperties keyConfig;
 
-    // Toggle to switch signing mode without adding a new endpoint.
-    // false = RFC-conform (sign headerB64 "." payloadB64)
-    // true  = ZK-padded (sign fixed-length padded header/payload bytes as used by the circuit)
-    private static final boolean SIGN_ZK_PADDED = false;
+    // Removed hardcoded SIGN_ZK_PADDED - now using config.isSigningInputPadded() instead
 
     public EudiCredential issueCredential(String userId, Map<String, String> attributeValues) {
         log.info("Issue new SD-JWT credential for user: {}", userId);
@@ -76,7 +73,7 @@ public class EudiCredentialService {
 
             Signature signer = Signature.getInstance("SHA256withECDSA");
             signer.initSign(keyService.getIssuerKeyPair().getPrivate());
-            if (SIGN_ZK_PADDED) {
+            if (config.isSigningInputPadded()) {
                 // Sign the exact fixed-length byte layout that the circuit hashes
                 byte[] padded = keyService.buildCredentialPaddedSigningInput(header, payload);
                 signer.update(padded);

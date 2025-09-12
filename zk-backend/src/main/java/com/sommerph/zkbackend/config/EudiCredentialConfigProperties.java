@@ -11,4 +11,5 @@ import java.util.List;
 @ConfigurationProperties(prefix = "eudi.credential")
 public class EudiCredentialConfigProperties {
     private List<String> claims;
+    private boolean signingInputPadded = false; // Default to RFC-conform behavior
 }

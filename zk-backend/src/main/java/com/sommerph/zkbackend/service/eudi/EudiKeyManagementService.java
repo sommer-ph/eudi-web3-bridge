@@ -244,6 +244,18 @@ public class EudiKeyManagementService {
         }
     }
 
+    public String getCredentialPaddedMsgHashHex(Map<String, Object> header, Map<String, Object> payload) {
+        log.info("Get padded credential message hash hex");
+        try {
+            byte[] msg = buildCredentialPaddedSigningInput(header, payload);
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(msg);
+            BigInteger hashInt = new BigInteger(1, hash);
+            return "0x" + hashInt.toString(16);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute padded credential message hash hex", e);
+        }
+    }
+
     public Map<String, String> extractCredentialSignatureHex(byte[] derSignature) {
         log.info("Extract credential signature hex from DER format");
         try {

@@ -34,6 +34,7 @@ eudi:
     storage:
       path: data/eudi-wallets
   credential:
+    signing-input-padded: true # false = RFC-conform (header.payload), true = ZK-padded (fixed-length)
     claims:
       - documentNumber
       - name
