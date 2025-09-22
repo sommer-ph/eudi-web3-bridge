@@ -5,3 +5,5 @@ pub mod parsing;
 pub mod hmac_sha512;
 pub mod key_derivation;
 pub mod bit_packing;
+pub mod sha256;
+pub mod base64_decode;

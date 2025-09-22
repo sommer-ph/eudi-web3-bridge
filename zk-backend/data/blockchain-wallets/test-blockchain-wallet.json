@@ -1,13 +1,13 @@
 {
   "userId" : "test",
-  "mnemonic" : "cross brick energy tribe ghost hammer mean fury diagram short ball demand",
-  "base64MasterPublicKey" : "AxyhdC5A1wiJ9CvEhEhT3vponFVspx16jKxiudoSxlyk",
-  "base64MasterSecretKey" : "fd8GxJsOMkVvr4AQAdabSJ+5whqZ5tzTzhaJM9Ix+iI=",
-  "base64MasterChainCode" : "ZCwB40dnMNbuVOHTAJy9eJ/YXSpwCH7BRLbzdqi40go=",
+  "mnemonic" : "life caught dust range achieve route load bird always envelope swallow hotel",
+  "base64MasterPublicKey" : "A0mNT946MC0pvKdlxVOV5Tn3bHq/YusPmL01EM7od36i",
+  "base64MasterSecretKey" : "3O5b21c4pppvGHQQLdc1EWkw2qK24FYihgDTRgnp7U4=",
+  "base64MasterChainCode" : "0UncM9SEynVUCoYjzOlDvYqVqVzDsZAcytzIVNm0tYM=",
   "childKeys" : [ {
-    "publicKeyBase64" : "A+FFfm1cQ93sSHQ29Fpb14tTfAtODhaim97rBHD8XQq3",
-    "secretKeyBase64" : "Hm4VNPk+xb07m+coeAVRW/IPAnUTVzXvy6y3X374Azs=",
-    "chainCodeBase64" : "v/c+LLgXVu+rMFoY60EJ8rJZw+91Jko7N7UW8r/6on0=",
+    "publicKeyBase64" : "AsdcGwV9EKVvgRwq1yS/Dd2mA2qr3RizL4m3LUQNbhhx",
+    "secretKeyBase64" : "/B0mwWuzv+fsFr/xM5wLzhSMjSo3YRcS1gSnv8609lw=",
+    "chainCodeBase64" : "pUgfPYlJ8o6hpBmeaiD4qPvfiTXOjPHj9n4nNjDzKrg=",
     "derivationIndex" : 0
   } ]
 }

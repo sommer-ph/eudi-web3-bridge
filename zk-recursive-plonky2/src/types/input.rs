@@ -6,6 +6,8 @@
 //! - BIP32 key derivation parameters
 //! - Circuit configuration modes (static/dynamic signatures, SHA512/Poseidon)
 
+#![allow(non_snake_case)]
+
 use serde::{Deserialize, Serialize};
 
 /// Elliptic curve point representation (x, y coordinates as hex strings).
@@ -65,4 +67,50 @@ pub struct FullInput {
     // SHA512-specific: Chain code output (optional for Poseidon mode)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cc_i: Option<String>,
+}
+
+/// Extended input that contains everything in FullInput plus
+/// header/payload Base64url ASCII bytes and alignment metadata
+/// used by the hash and pk_c-extraction circuits.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullInputExtended {
+    // === Fields from FullInput ===
+    // C1+C2: EUDI Key Derivation (P256)
+    pub pk_c: Point,
+    pub sk_c: String,
+
+    // C3: Signature Verification (P256)
+    pub pk_issuer: Point,
+    pub msg: String,
+    pub signature: Signature,
+
+    // C4: Secp256k1 Key Derivation
+    pub sk_0: String,
+    pub pk_0: Point,
+
+    // C5: Key Derivation - Mode-dependent fields
+    pub cc_0: String,
+    pub derivation_index: u32,
+    pub pk_i: Point,
+
+    // Optional chain-code output (may be absent in extended JSON)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cc_i: Option<String>,
+
+    // === Extended fields for header/payload hashing and aligned Base64 slices ===
+    // ASCII codes (as strings in JSON) for fixed-size padded arrays
+    pub headerB64: Vec<String>,
+    pub headerB64Length: String,
+    pub payloadB64: Vec<String>,
+    pub payloadB64Length: String,
+
+    // Offsets/lengths for aligned Base64 slices used for JWK x/y extraction
+    pub offXB64: String,
+    pub lenXB64: String,
+    pub dropX: String,
+    pub lenXInner: String,
+    pub offYB64: String,
+    pub lenYB64: String,
+    pub dropY: String,
+    pub lenYInner: String,
 }
