@@ -393,4 +393,171 @@ public class ProofPreparationService {
         }
     }
 
+    public void prepareRecursiveProofExtendedInput(String userId, int derivationIndex) {
+        log.info("Prepare recursive proof extended input data for user: {} with derivation index: {}", userId, derivationIndex);
+        try {
+            // EUDI wallet and credential data
+            EudiWallet eudiWallet = eudiWalletService.loadWallet(userId);
+            EudiCredential credential = eudiWallet.getCredentials().get(0);
+
+            // Blockchain wallet data
+            BlockchainWallet blockchainWallet = blockchainWalletService.loadWallet(userId);
+            DeterministicKey masterKey = blockchainKeyManagementService.deriveMasterKey(blockchainWallet.getMnemonic());
+            DeterministicKey childKey = blockchainKeyManagementService.deriveChildKey(blockchainWallet.getMnemonic(), derivationIndex);
+
+            // Extract issuer public key (pk_issuer)
+            Map<String, String> pkIssuerHex = eudiKeyManagementService.getIssuerPublicKeyHex();
+            RecursiveProofExtendedInput.PublicKeyPoint pkIssuer = new RecursiveProofExtendedInput.PublicKeyPoint(
+                    pkIssuerHex.get("x"),
+                    pkIssuerHex.get("y")
+            );
+
+            // Extract message hash (msg) - use hash method consistent with credential signing configuration
+            String msg;
+            if (eudiCredentialConfig.isSigningInputPadded()) {
+                msg = eudiKeyManagementService.getCredentialPaddedMsgHashHex(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            } else {
+                msg = eudiKeyManagementService.getCredentialMsgHashHex(
+                        credential.getHeader(),
+                        credential.getPayload()
+                );
+            }
+
+            // Extract signature
+            Map<String, String> signatureHex = eudiKeyManagementService.extractCredentialSignatureHex(
+                    java.util.Base64.getUrlDecoder().decode(credential.getSignature())
+            );
+            RecursiveProofExtendedInput.Signature signature = new RecursiveProofExtendedInput.Signature(
+                    signatureHex.get("r"),
+                    signatureHex.get("s")
+            );
+
+            // Extract credential public key (pk_c)
+            Object cnfObj = credential.getPayload().get("cnf");
+            Map<String, Object> cnfMap = (Map<String, Object>) cnfObj;
+            Map<String, Object> jwkMap = (Map<String, Object>) cnfMap.get("jwk");
+            Map<String, String> pkCredHex = eudiKeyManagementService.getCredentialBindingKeyJwkHex(jwkMap);
+            RecursiveProofExtendedInput.PublicKeyPoint pkC = new RecursiveProofExtendedInput.PublicKeyPoint(
+                    pkCredHex.get("x"),
+                    pkCredHex.get("y")
+            );
+
+            // Extract credential secret key (sk_c)
+            String skC = eudiKeyManagementService.getUserCredentialSecretKeyHex(eudiWallet.getBase64SecretKey());
+
+            // Extract master secret key (sk_0)
+            String sk0 = blockchainKeyManagementService.getSecretKeyHex(masterKey);
+
+            // Extract master public key (pk_0)
+            Map<String, String> pkMasterHex = blockchainKeyManagementService.getPublicKeyHex(masterKey);
+            RecursiveProofExtendedInput.PublicKeyPoint pk0 = new RecursiveProofExtendedInput.PublicKeyPoint(
+                    pkMasterHex.get("x"),
+                    pkMasterHex.get("y")
+            );
+
+            // Extract master chain code (cc_0)
+            String cc0 = blockchainKeyManagementService.getChainCodeHex(masterKey);
+
+            // Extract child public key (pk_i)
+            Map<String, String> pkChildHex = blockchainKeyManagementService.getPublicKeyHex(childKey);
+            RecursiveProofExtendedInput.PublicKeyPoint pkI = new RecursiveProofExtendedInput.PublicKeyPoint(
+                    pkChildHex.get("x"),
+                    pkChildHex.get("y")
+            );
+
+            // Extract child chain code (cc_i)
+            String ccI = blockchainKeyManagementService.getChainCodeHex(childKey);
+
+            // Prepare header and payload data
+            // Convert header/payload maps to Base64url strings like in existing service method
+            ObjectMapper mapper = new ObjectMapper();
+            String headerB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(credential.getHeader()));
+            String payloadB64 = SignatureUtils.base64url(mapper.writeValueAsBytes(credential.getPayload()));
+
+            // Validate Base64url strings
+            if (!JwsUtils.isValidBase64UrlAscii(headerB64)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid Base64url characters in credential header");
+            }
+            if (!JwsUtils.isValidBase64UrlAscii(payloadB64)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid Base64url characters in credential payload");
+            }
+
+            // Convert Base64url strings to ASCII byte arrays (for SHA-256) and pad to circuit sizes
+            String[] headerB64BytesRaw = JwsUtils.base64UrlToAsciiBytesString(headerB64);
+            String[] payloadB64BytesRaw = JwsUtils.base64UrlToAsciiBytesString(payloadB64);
+            String[] headerB64Bytes = padOrTrim(headerB64BytesRaw, 64);
+            String[] payloadB64Bytes = padOrTrim(payloadB64BytesRaw, 1024);
+
+            // Compute aligned Base64url coordinate slices + inner selection if enabled
+            String offXB64 = null, lenXB64 = null, dropX = null, lenXInner = null;
+            String offYB64 = null, lenYB64 = null, dropY = null, lenYInner = null;
+            if (computeOffsets) {
+                try {
+                    JwsUtils.Base64UrlAlignedOffsetResult offsetResult = JwsUtils.findJwkXYOffsetsInBase64urlAligned(payloadB64);
+
+                    if (!offsetResult.found) {
+                        throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                                "JWK x/y coordinates not found in Base64url payload when computeOffsets is enabled");
+                    }
+
+                    offXB64 = String.valueOf(offsetResult.offXB64);
+                    lenXB64 = String.valueOf(offsetResult.lenXB64);
+                    dropX = String.valueOf(offsetResult.dropX);
+                    lenXInner = String.valueOf(offsetResult.lenXInner);
+                    offYB64 = String.valueOf(offsetResult.offYB64);
+                    lenYB64 = String.valueOf(offsetResult.lenYB64);
+                    dropY = String.valueOf(offsetResult.dropY);
+                    lenYInner = String.valueOf(offsetResult.lenYInner);
+
+                    // Optional: validate lengths are plausible
+                    if (!(offsetResult.lenXInner == 43 || offsetResult.lenXInner == 44))
+                        throw new IllegalStateException("Unexpected x length");
+                    if (!(offsetResult.lenYInner == 43 || offsetResult.lenYInner == 44))
+                        throw new IllegalStateException("Unexpected y length");
+                } catch (Exception e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Error processing Base64url payload: " + e.getMessage());
+                }
+            }
+
+            // Create recursive proof input
+            RecursiveProofExtendedInput recursiveExtendedInput = new RecursiveProofExtendedInput(
+                    pkIssuer,
+                    msg,
+                    signature,
+                    pkC,
+                    skC,
+                    sk0,
+                    pk0,
+                    cc0,
+                    derivationIndex,
+                    pkI,
+                    ccI,
+                    headerB64Bytes,
+                    String.valueOf(headerB64.length()),
+                    payloadB64Bytes,
+                    String.valueOf(payloadB64.length()),
+                    offXB64,
+                    lenXB64,
+                    dropX,
+                    lenXInner,
+                    offYB64,
+                    lenYB64,
+                    dropY,
+                    lenYInner
+            );
+
+            // Export to file
+            exportUtils.writeRecursiveProofExtendedToFile(recursiveExtendedInput, userId);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error preparing recursive proof input data for user: " + userId, e);
+        }
+    }
+
 }

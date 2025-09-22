@@ -142,4 +142,19 @@ public class ProofPreparationController {
         }
     }
 
+    @Operation(summary = "Prepare extended recursive proof data (with JWS binding)")
+    @PostMapping("/recursive-extended/{userId}/{derivationIndex}")
+    public ResponseEntity<?> prepareRecursiveProofExtendedInput(
+            @PathVariable @NotBlank String userId,
+            @PathVariable @Min(0) int derivationIndex) {
+        log.info("Prepare extended recursive proof input for user: {}, derivation index: {}", userId, derivationIndex);
+        try {
+            proofService.prepareRecursiveProofExtendedInput(userId, derivationIndex);
+            return ResponseEntity.ok("Extended recursive proof input data prepared for user: " + userId + ", derivation index: " + derivationIndex);
+        } catch (Exception e) {
+            log.error("Failed to prepare extended recursive proof input for user: {}, derivation index: {}", userId, derivationIndex, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
 }

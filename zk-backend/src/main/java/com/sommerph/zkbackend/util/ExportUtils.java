@@ -151,6 +151,86 @@ public class ExportUtils {
         }
     }
 
+    public void writeRecursiveProofExtendedToFile(RecursiveProofExtendedInput recursiveProof, String userId) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            
+            Map<String, Object> json = new LinkedHashMap<>();
+            
+            // pk_issuer
+            Map<String, Object> pkIssuer = new LinkedHashMap<>();
+            pkIssuer.put("x", recursiveProof.getPk_issuer().getX());
+            pkIssuer.put("y", recursiveProof.getPk_issuer().getY());
+            json.put("pk_issuer", pkIssuer);
+            
+            // msg
+            json.put("msg", recursiveProof.getMsg());
+            
+            // signature
+            Map<String, Object> signature = new LinkedHashMap<>();
+            signature.put("r", recursiveProof.getSignature().getR());
+            signature.put("s", recursiveProof.getSignature().getS());
+            json.put("signature", signature);
+            
+            // pk_c
+            Map<String, Object> pkC = new LinkedHashMap<>();
+            pkC.put("x", recursiveProof.getPk_c().getX());
+            pkC.put("y", recursiveProof.getPk_c().getY());
+            json.put("pk_c", pkC);
+            
+            // sk_c
+            json.put("sk_c", recursiveProof.getSk_c());
+            
+            // sk_0
+            json.put("sk_0", recursiveProof.getSk_0());
+            
+            // pk_0
+            Map<String, Object> pk0 = new LinkedHashMap<>();
+            pk0.put("x", recursiveProof.getPk_0().getX());
+            pk0.put("y", recursiveProof.getPk_0().getY());
+            json.put("pk_0", pk0);
+            
+            // cc_0
+            json.put("cc_0", recursiveProof.getCc_0());
+            
+            // derivation_index
+            json.put("derivation_index", recursiveProof.getDerivation_index());
+            
+            // pk_i
+            Map<String, Object> pkI = new LinkedHashMap<>();
+            pkI.put("x", recursiveProof.getPk_i().getX());
+            pkI.put("y", recursiveProof.getPk_i().getY());
+            json.put("pk_i", pkI);
+            
+            // cc_i
+            json.put("cc_i", recursiveProof.getCc_i());
+
+            // Extended JWS fields
+            json.put("headerB64", recursiveProof.getHeaderB64());
+            json.put("headerB64Length", recursiveProof.getHeaderB64Length());
+            json.put("payloadB64", recursiveProof.getPayloadB64());
+            json.put("payloadB64Length", recursiveProof.getPayloadB64Length());
+            
+            // Base64url coordinate slice + inner selection fields (only if computed)
+            if (recursiveProof.getOffXB64() != null) {
+                json.put("offXB64", recursiveProof.getOffXB64());
+                json.put("lenXB64", recursiveProof.getLenXB64());
+                json.put("dropX", recursiveProof.getDropX());
+                json.put("lenXInner", recursiveProof.getLenXInner());
+                json.put("offYB64", recursiveProof.getOffYB64());
+                json.put("lenYB64", recursiveProof.getLenYB64());
+                json.put("dropY", recursiveProof.getDropY());
+                json.put("lenYInner", recursiveProof.getLenYInner());
+            }
+            
+            String path = properties.getStorage().getPath() + "/" + userId + "_recursive_extended.json";
+            mapper.writeValue(new File(path), json);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to write extended recursive proof export file", e);
+        }
+    }
+
     public CredentialWalletBindingExtended createCredentialWalletBindingExtended(String userId, ProofPreparationRegistry registry) {
         if (!registry.existsEudiWalletKeyDerivation(userId)) {
             throw new RuntimeException("Missing preparation data: C1 - EUDI Wallet Key Derivation");
