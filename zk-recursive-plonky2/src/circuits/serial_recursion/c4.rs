@@ -84,16 +84,20 @@ mod tests {
     
     #[test]
     fn test_build_c4_circuit_with_static_c3() {
-        let c1_2_circuit = build_c1_2_circuit();
+        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
+        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
+        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         println!("C4 circuit (with static C3) built successfully");
         println!("Circuit size: {} gates", c4_circuit.data.common.degree());
     }
-    
+
     #[test]
     fn test_build_c4_circuit_with_dynamic_c3() {
-        let c1_2_circuit = build_c1_2_circuit();
+        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
+        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
+        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         println!("C4 circuit (with dynamic C3) built successfully");

@@ -386,4 +386,4 @@ template MsgPkcBinding() {
     
 }
 
-component main = MsgPkcBinding();
+component main { public [ msghash ] } = MsgPkcBinding();

@@ -12,9 +12,10 @@ use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2_ecdsa::gadgets::biguint::WitnessBigUint;
 use plonky2_ecdsa::field::p256_scalar::P256Scalar;
 
-use crate::types::input::{FullInput, SignatureMode, DerivationMode};
+use crate::types::input::{FullInputExtended, SignatureMode, DerivationMode};
 use crate::utils::parsing::{hex_to_bigint, hex_to_fixed_be_bytes, set_bytes_as_bits_be, set_u32_be_bits_non_hardened};
 use crate::circuits::parallel_recursion::{
+    msg_pk_c_binding::{build_msg_pk_c_binding_circuit, MsgPkCBindingCircuit},
     c1_2::{build_c1_2_circuit, C1_2Circuit},
     c3::{build_c3_circuit, C3Circuit},
     c4::{build_c4_circuit, C4Circuit},
@@ -43,6 +44,7 @@ fn cc_hex_to_field_elements(cc_hex: &str) -> [F; 8] {
 
 /// Parallel recursive circuits container
 pub struct ParallelCircuits {
+    pub msg_pk_c_binding: MsgPkCBindingCircuit,
     pub c1_2: C1_2Circuit,
     pub c3: C3Circuit,
     pub c4: C4Circuit,
@@ -54,7 +56,12 @@ pub fn build_parallel_circuits(signature_mode: SignatureMode, derivation_mode: D
     println!("Building parallel recursive circuits...");
     let total_start = Instant::now();
     
-    // Build circuits independently (no dependencies between c1_2, c3, c4)
+    // Build circuits independently (no dependencies between msg_pk_c_binding, c1_2, c3, c4)
+    println!("Building msg_pk_c_binding circuit (Message PK_C Binding)...");
+    let msg_pk_c_binding_start = Instant::now();
+    let msg_pk_c_binding = build_msg_pk_c_binding_circuit();
+    println!("msg_pk_c_binding circuit built in {:?} ({} gates)", msg_pk_c_binding_start.elapsed(), msg_pk_c_binding.data.common.degree());
+
     println!("Building C1_2 circuit (EUDI Key Derivation)...");
     let c1_2_start = Instant::now();
     let c1_2 = build_c1_2_circuit();
@@ -70,14 +77,14 @@ pub fn build_parallel_circuits(signature_mode: SignatureMode, derivation_mode: D
     let c4 = build_c4_circuit();
     println!("C4 circuit built in {:?} ({} gates)", c4_start.elapsed(), c4.data.common.degree());
     
-    println!("Building C5 circuit (BIP32 Key Derivation + recursive verification of c1_2, c3, c4) with {:?} derivation mode...", derivation_mode);
+    println!("Building C5 circuit (BIP32 Key Derivation + recursive verification of msg_pk_c_binding, c1_2, c3, c4) with {:?} derivation mode...", derivation_mode);
     let c5_start = Instant::now();
-    let c5 = build_c5_circuit_optimized(&c1_2.data.common, &c3.data.common, &c4.data.common, derivation_mode.clone());
+    let c5 = build_c5_circuit_optimized(&msg_pk_c_binding.data.common, &c1_2.data.common, &c3.data.common, &c4.data.common, derivation_mode.clone());
     println!("C5 circuit built in {:?} ({} gates)", c5_start.elapsed(), c5.data.common.degree());
     
     println!("All parallel circuits built in {:?}", total_start.elapsed());
     
-    ParallelCircuits { c1_2, c3, c4, c5 }
+    ParallelCircuits { msg_pk_c_binding, c1_2, c3, c4, c5 }
 }
 
 /// Generate parallel recursive proof  
@@ -96,11 +103,14 @@ pub fn generate_parallel_recursive_proof(
     println!("=== PARALLEL RECURSIVE PROOF GENERATION ({}) ===", signature_mode_str);
     
     // Load input data
-    println!("Loading input data from: {}", input_file);
+    println!("Loading extended input data from: {}", input_file);
     let input_data = fs::read_to_string(input_file)?;
-    let input: FullInput = serde_json::from_str(&input_data)?;
+    let input: FullInputExtended = serde_json::from_str(&input_data)?;
     
-    // === PARALLEL STEPS: Generate C1_2, C3, C4 Proofs ===
+    // === PARALLEL STEPS: Generate msg_pk_c_binding, C1_2, C3, C4 Proofs ===
+    println!("\n=== PARALLEL STEP: MSG_PK_C_BINDING PROOF (Message PK_C Binding) ===");
+    let msg_pk_c_binding_proof = generate_msg_pk_c_binding_proof(&circuits.msg_pk_c_binding, &input, build_dir)?;
+
     println!("\n=== PARALLEL STEP: C1_2 PROOF (EUDI Key Derivation) ===");
     let c1_2_proof = generate_c1_2_proof(&circuits.c1_2, &input, build_dir)?;
     
@@ -112,7 +122,7 @@ pub fn generate_parallel_recursive_proof(
     
     // === FINAL STEP: Generate C5 Proof ===
     println!("\n=== FINAL STEP: C5 PROOF (BIP32 Key Derivation + Recursive Verification of c1_2, c3, c4) ===");
-    let c5_proof = generate_c5_proof(&circuits.c5, &circuits.c1_2, &circuits.c3, &circuits.c4, &input, &c1_2_proof, &c3_proof, &c4_proof, build_dir)?;
+    let c5_proof = generate_c5_proof(&circuits.c5, &circuits.msg_pk_c_binding, &circuits.c1_2, &circuits.c3, &circuits.c4, &input, &msg_pk_c_binding_proof, &c1_2_proof, &c3_proof, &c4_proof, build_dir)?;
     
     // Verify final proof
     println!("Verifying final C5 proof...");
@@ -145,10 +155,159 @@ pub fn generate_parallel_recursive_proof(
     Ok(())
 }
 
+/// Generate msg_pk_c_binding proof (Message PK_C Binding)
+fn generate_msg_pk_c_binding_proof(
+    circuit: &MsgPkCBindingCircuit,
+    input: &FullInputExtended,
+    build_dir: &Path,
+) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
+    use crate::utils::sha256::{MAX_HEADER, MAX_PAYLOAD};
+
+    println!("Setting up msg_pk_c_binding witness...");
+    let witness_start = Instant::now();
+
+    let mut pw = PartialWitness::<F>::new();
+
+    // Set header bytes
+    if input.headerB64.len() < MAX_HEADER {
+        println!("Warning: headerB64 has {} entries; expected {}. Missing entries treated as 0.", input.headerB64.len(), MAX_HEADER);
+    }
+    for i in 0..MAX_HEADER {
+        let v = input
+            .headerB64
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        pw.set_target(circuit.targets.header[i], F::from_canonical_u32(v))?;
+    }
+
+    // Set payload bytes
+    if input.payloadB64.len() < MAX_PAYLOAD {
+        println!("Warning: payloadB64 has {} entries; expected {}. Missing entries treated as 0.", input.payloadB64.len(), MAX_PAYLOAD);
+    }
+    for i in 0..MAX_PAYLOAD {
+        let v = input
+            .payloadB64
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        pw.set_target(circuit.targets.payload[i], F::from_canonical_u32(v))?;
+    }
+
+    // Set lengths
+    let header_len_u32 = input.headerB64Length.parse::<u32>().unwrap_or(0);
+    let payload_len_u32 = input.payloadB64Length.parse::<u32>().unwrap_or(0);
+    pw.set_target(circuit.targets.header_len, F::from_canonical_u32(header_len_u32))?;
+    pw.set_target(circuit.targets.payload_len, F::from_canonical_u32(payload_len_u32))?;
+
+    // Set SHA-256 message bits (MSB-first per byte) to match gated layout
+    let mut msg_bytes: Vec<u8> = Vec::with_capacity(MAX_HEADER + 1 + MAX_PAYLOAD);
+    let hlen = header_len_u32.min(MAX_HEADER as u32) as usize;
+    for i in 0..MAX_HEADER {
+        let b = if i < hlen {
+            input
+                .headerB64
+                .get(i)
+                .and_then(|s| s.parse::<u8>().ok())
+                .unwrap_or(0u8)
+        } else { 0u8 };
+        msg_bytes.push(b);
+    }
+    msg_bytes.push(46u8); // '.'
+    let plen = payload_len_u32.min(MAX_PAYLOAD as u32) as usize;
+    for i in 0..MAX_PAYLOAD {
+        let b = if i < plen {
+            input
+                .payloadB64
+                .get(i)
+                .and_then(|s| s.parse::<u8>().ok())
+                .unwrap_or(0u8)
+        } else { 0u8 };
+        msg_bytes.push(b);
+    }
+    debug_assert_eq!(circuit.targets.message_bits.len(), msg_bytes.len() * 8, "message bit length must match");
+    let mut k = 0;
+    for &b in &msg_bytes {
+        for i in (0..8).rev() { // MSB-first
+            let bit = ((b >> i) & 1) == 1;
+            pw.set_bool_target(circuit.targets.message_bits[k], bit)?;
+            k += 1;
+        }
+    }
+
+    // Set expected msg (digest)
+    let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
+    pw.set_biguint_target(&circuit.targets.msg.value, &msg.to_canonical_biguint())?;
+
+    // Set Base64url extraction parameters
+    let off_x_b64 = input.offXB64.parse::<u32>().unwrap_or(0);
+    let len_x_b64 = input.lenXB64.parse::<u32>().unwrap_or(0);
+    let drop_x = input.dropX.parse::<u32>().unwrap_or(0);
+    let len_x_inner = input.lenXInner.parse::<u32>().unwrap_or(0);
+    let off_y_b64 = input.offYB64.parse::<u32>().unwrap_or(0);
+    let len_y_b64 = input.lenYB64.parse::<u32>().unwrap_or(0);
+    let drop_y = input.dropY.parse::<u32>().unwrap_or(0);
+    let len_y_inner = input.lenYInner.parse::<u32>().unwrap_or(0);
+
+    pw.set_target(circuit.targets.off_x_b64, F::from_canonical_u32(off_x_b64))?;
+    pw.set_target(circuit.targets.len_x_b64, F::from_canonical_u32(len_x_b64))?;
+    pw.set_target(circuit.targets.drop_x, F::from_canonical_u32(drop_x))?;
+    pw.set_target(circuit.targets.len_x_inner, F::from_canonical_u32(len_x_inner))?;
+    pw.set_target(circuit.targets.off_y_b64, F::from_canonical_u32(off_y_b64))?;
+    pw.set_target(circuit.targets.len_y_b64, F::from_canonical_u32(len_y_b64))?;
+    pw.set_target(circuit.targets.drop_y, F::from_canonical_u32(drop_y))?;
+    pw.set_target(circuit.targets.len_y_inner, F::from_canonical_u32(len_y_inner))?;
+
+    // pk_c limbs (little-endian u32 words from big-endian 32 bytes)
+    fn hex_to_limbs_le(hex: &str) -> [u32; 8] {
+        let mut be = [0u8; 32];
+        let bytes = hex::decode(hex.trim_start_matches("0x")).unwrap_or_default();
+        let src = if bytes.len() > 32 { &bytes[bytes.len() - 32..] } else { &bytes[..] };
+        be[32 - src.len()..].copy_from_slice(src);
+        let mut limbs = [0u32; 8];
+        for i in 0..8 {
+            let start = 32 - (i + 1) * 4;
+            limbs[i] = u32::from_be_bytes([
+                be[start], be[start + 1], be[start + 2], be[start + 3],
+            ]);
+        }
+        limbs
+    }
+    let pkc_x_limbs = hex_to_limbs_le(&input.pk_c.x);
+    let pkc_y_limbs = hex_to_limbs_le(&input.pk_c.y);
+    for i in 0..8 { pw.set_target(circuit.targets.pkc_x_limbs[i], F::from_canonical_u32(pkc_x_limbs[i]))?; }
+    for i in 0..8 { pw.set_target(circuit.targets.pkc_y_limbs[i], F::from_canonical_u32(pkc_y_limbs[i]))?; }
+
+    println!("msg_pk_c_binding witness setup time: {:?}", witness_start.elapsed());
+
+    // Generate proof
+    println!("Generating msg_pk_c_binding proof...");
+    let mut timing = TimingTree::new("msg_pk_c_binding_proof", Level::Info);
+    let proof = prove(&circuit.data.prover_only, &circuit.data.common, pw, &mut timing)?;
+    timing.print();
+
+    // Save proof artifacts
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("msg_pk_c_binding_proof.bin"), &proof_data)?;
+    println!("msg_pk_c_binding proof size: {} bytes", proof.to_bytes().len());
+
+    // Save verifier data
+    let verifier_data = bincode::serialize(&circuit.data.verifier_only)?;
+    fs::write(build_dir.join("msg_pk_c_binding_verifier.bin"), &verifier_data)?;
+    println!("msg_pk_c_binding verifier data saved: {} bytes", verifier_data.len());
+
+    // Save common circuit data
+    let common_data = bincode::serialize(&circuit.data.common)?;
+    fs::write(build_dir.join("msg_pk_c_binding_common.bin"), &common_data)?;
+    println!("msg_pk_c_binding common data saved: {} bytes", common_data.len());
+
+    Ok(proof)
+}
+
 /// Generate C1_2 proof (EUDI Key Derivation)
 fn generate_c1_2_proof(
     circuit: &C1_2Circuit,
-    input: &FullInput,
+    input: &FullInputExtended,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
     println!("Setting up C1_2 witness...");
@@ -197,7 +356,7 @@ fn generate_c1_2_proof(
 /// Generate C3 proof (Signature Verification)
 fn generate_c3_proof(
     circuit: &C3Circuit,
-    input: &FullInput,
+    input: &FullInputExtended,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
     println!("Setting up C3 witness...");
@@ -251,7 +410,7 @@ fn generate_c3_proof(
 /// Generate C4 proof (Secp256k1 Key Derivation)
 fn generate_c4_proof(
     circuit: &C4Circuit,
-    input: &FullInput,
+    input: &FullInputExtended,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
     println!("Setting up C4 witness...");
@@ -300,10 +459,12 @@ fn generate_c4_proof(
 /// Generate C5 proof (BIP32 Key Derivation + Recursive Verification of c1_2, c3, c4)
 fn generate_c5_proof(
     circuit: &C5Circuit,
+    msg_pk_c_binding_circuit: &MsgPkCBindingCircuit,
     c1_2_circuit: &C1_2Circuit,
     c3_circuit: &C3Circuit,
     c4_circuit: &C4Circuit,
-    input: &FullInput,
+    input: &FullInputExtended,
+    msg_pk_c_binding_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     c1_2_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     c3_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     c4_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
@@ -333,7 +494,9 @@ fn generate_c5_proof(
     
     let mut pw = PartialWitness::<F>::new();
     
-    // Set recursive proofs for all 3 circuits
+    // Set recursive proofs for all 4 circuits
+    pw.set_proof_with_pis_target(&circuit.targets.msg_pk_c_binding_proof, msg_pk_c_binding_proof)?;
+    pw.set_verifier_data_target(&circuit.targets.msg_pk_c_binding_vd, &msg_pk_c_binding_circuit.data.verifier_only)?;
     pw.set_proof_with_pis_target(&circuit.targets.c1_2_proof, c1_2_proof)?;
     pw.set_verifier_data_target(&circuit.targets.c1_2_vd, &c1_2_circuit.data.verifier_only)?;
     pw.set_proof_with_pis_target(&circuit.targets.c3_proof, c3_proof)?;
