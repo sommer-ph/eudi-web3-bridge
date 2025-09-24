@@ -98,9 +98,9 @@ echo
 
 # Set cargo command based on proof mode
 if [[ "$PROOF_MODE" == "serial" ]]; then
-    CARGO_CMD="cargo run --release --bin zk-recursive -- serial-extended --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
+    CARGO_CMD="cargo run --release --bin zk-recursive -- serial --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
 elif [[ "$PROOF_MODE" == "parallel" ]]; then
-    CARGO_CMD="cargo run --release --bin zk-recursive -- parallel-extended --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
+    CARGO_CMD="cargo run --release --bin zk-recursive -- parallel --input $DEST_FILE --sig-mode static --der-mode $DERIVE_MODE"
 else
     CARGO_CMD="cargo run --release --bin zk-recursive -- outer-extended --input $DEST_FILE --inner-sig-mode static --outer-derive-mode $DERIVE_MODE"
 fi

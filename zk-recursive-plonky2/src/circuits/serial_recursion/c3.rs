@@ -125,15 +125,19 @@ mod tests {
     
     #[test]
     fn test_build_c3_circuit_static() {
-        let c1_2_circuit = build_c1_2_circuit();
+        use crate::circuits::serial_recursion::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
+        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
+        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
         println!("C3 circuit (static mode) built successfully");
         println!("Circuit size: {} gates", c3_circuit.data.common.degree());
     }
-    
+
     #[test]
     fn test_build_c3_circuit_dynamic() {
-        let c1_2_circuit = build_c1_2_circuit();
+        use crate::circuits::serial_recursion::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
+        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
+        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
         let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
         println!("C3 circuit (dynamic mode) built successfully");
         println!("Circuit size: {} gates", c3_circuit.data.common.degree());
