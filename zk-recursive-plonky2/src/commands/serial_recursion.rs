@@ -15,8 +15,8 @@ use plonky2_ecdsa::field::p256_scalar::P256Scalar;
 use crate::types::input::{FullInputExtended, SignatureMode, DerivationMode};
 use crate::utils::parsing::{hex_to_bigint, hex_to_fixed_be_bytes, set_bytes_as_bits_be, set_u32_be_bits_non_hardened};
 use crate::circuits::serial_recursion::{
-    msg_pk_c_binding::{build_msg_pk_c_binding_circuit, MsgPkCBindingCircuit},
-    c1_2::{build_c1_2_circuit, C1_2Circuit},
+    c1::{build_c1_circuit, C1Circuit},
+    c2::{build_c2_circuit, C2Circuit},
     c3::{build_c3_circuit, C3Circuit},
     c4::{build_c4_circuit, C4Circuit},
     c5::{build_c5_circuit_optimized, C5Circuit, C5KeyDerivationTargets},
@@ -44,8 +44,8 @@ fn cc_hex_to_field_elements(cc_hex: &str) -> [F; 8] {
 
 /// Serial recursive circuits container
 pub struct SerialCircuits {
-    pub msg_pk_c_binding: MsgPkCBindingCircuit,
-    pub c1_2: C1_2Circuit,
+    pub c1: C1Circuit,
+    pub c2: C2Circuit,
     pub c3: C3Circuit,
     pub c4: C4Circuit,
     pub c5: C5Circuit,
@@ -57,26 +57,26 @@ pub fn build_serial_circuits(signature_mode: SignatureMode, derivation_mode: Der
     let total_start = Instant::now();
 
     // Build circuits sequentially (each depends on the previous one)
-    println!("Building msg_pk_c_binding circuit (Message PK_C Binding)...");
-    let msg_pk_c_binding_start = Instant::now();
-    let msg_pk_c_binding = build_msg_pk_c_binding_circuit();
-    println!("msg_pk_c_binding circuit built in {:?} ({} gates)", msg_pk_c_binding_start.elapsed(), msg_pk_c_binding.data.common.degree());
+    println!("Building C1 circuit (EUDI Key Derivation)...");
+    let c1_start = Instant::now();
+    let c1 = build_c1_circuit();
+    println!("C1 circuit built in {:?} ({} gates)", c1_start.elapsed(), c1.data.common.degree());
 
-    println!("Building C1_2 circuit (EUDI Key Derivation + msg_pk_c_binding recursive)...");
-    let c1_2_start = Instant::now();
-    let c1_2 = build_c1_2_circuit(&msg_pk_c_binding.data.common);
-    println!("C1_2 circuit built in {:?} ({} gates)", c1_2_start.elapsed(), c1_2.data.common.degree());
+    println!("Building C2 circuit (Public Key Decode and Check + C1 recursive)...");
+    let c2_start = Instant::now();
+    let c2 = build_c2_circuit(&c1.data.common);
+    println!("C2 circuit built in {:?} ({} gates)", c2_start.elapsed(), c2.data.common.degree());
     
-    println!("Building C3 circuit (Signature Verification + C1_2 recursive)...");
+    println!("Building C3 circuit (Hash Calculation + Signature Verification + C2 recursive)...");
     let c3_start = Instant::now();
-    let c3 = build_c3_circuit(&c1_2.data.common, signature_mode);
+    let c3 = build_c3_circuit(&c2.data.common, signature_mode);
     println!("C3 circuit built in {:?} ({} gates)", c3_start.elapsed(), c3.data.common.degree());
-    
+
     println!("Building C4 circuit (Secp256k1 Key Derivation + C3 recursive)...");
     let c4_start = Instant::now();
     let c4 = build_c4_circuit(&c3.data.common);
     println!("C4 circuit built in {:?} ({} gates)", c4_start.elapsed(), c4.data.common.degree());
-    
+
     println!("Building C5 circuit (BIP32 Key Derivation + C4 recursive) with {:?} derivation mode...", derivation_mode);
     let c5_start = Instant::now();
     let c5 = build_c5_circuit_optimized(&c4.data.common, derivation_mode.clone());
@@ -84,7 +84,7 @@ pub fn build_serial_circuits(signature_mode: SignatureMode, derivation_mode: Der
     
     println!("All serial circuits built in {:?}", total_start.elapsed());
 
-    SerialCircuits { msg_pk_c_binding, c1_2, c3, c4, c5 }
+    SerialCircuits { c1, c2, c3, c4, c5 }
 }
 
 /// Generate serial recursive proof
@@ -107,17 +107,17 @@ pub fn generate_serial_recursive_proof(
     let input_data = fs::read_to_string(input_file)?;
     let input: FullInputExtended = serde_json::from_str(&input_data)?;
 
-    // === STEP 1: Generate msg_pk_c_binding Proof ===
-    println!("\n=== STEP 1: MSG_PK_C_BINDING PROOF (Message PK_C Binding) ===");
-    let msg_pk_c_binding_proof = generate_msg_pk_c_binding_proof(&circuits.msg_pk_c_binding, &input, build_dir)?;
+    // === STEP 1: Generate C1 Proof ===
+    println!("\n=== STEP 1: C1 PROOF (EUDI Key Derivation) ===");
+    let c1_proof = generate_c1_proof(&circuits.c1, &input, build_dir)?;
 
-    // === STEP 2: Generate C1_2 Proof ===
-    println!("\n=== STEP 2: C1_2 PROOF (EUDI Key Derivation + msg_pk_c_binding recursive) ===");
-    let c1_2_proof = generate_c1_2_proof(&circuits.c1_2, &circuits.msg_pk_c_binding, &input, &msg_pk_c_binding_proof, build_dir)?;
+    // === STEP 2: Generate C2 Proof ===
+    println!("\n=== STEP 2: C2 PROOF (Public Key Decode and Check + C1 recursive) ===");
+    let c2_proof = generate_c2_proof(&circuits.c2, &circuits.c1, &input, &c1_proof, build_dir)?;
 
     // === STEP 3: Generate C3 Proof ===
-    println!("\n=== STEP 3: C3 PROOF (Signature Verification + C1_2 Recursive) ===");
-    let c3_proof = generate_c3_proof(&circuits.c3, &circuits.c1_2, &input, &c1_2_proof, build_dir)?;
+    println!("\n=== STEP 3: C3 PROOF (Hash Calculation + Signature Verification + C2 Recursive) ===");
+    let c3_proof = generate_c3_proof(&circuits.c3, &circuits.c2, &input, &c2_proof, build_dir)?;
 
     // === STEP 4: Generate C4 Proof ===
     println!("\n=== STEP 4: C4 PROOF (Secp256k1 Key Derivation + C3 Recursive) ===");
@@ -158,31 +158,73 @@ pub fn generate_serial_recursive_proof(
     Ok(())
 }
 
-/// Generate msg_pk_c_binding proof (Message PK_C Binding)
-fn generate_msg_pk_c_binding_proof(
-    circuit: &MsgPkCBindingCircuit,
+/// Generate C1 proof (EUDI Key Derivation)
+fn generate_c1_proof(
+    circuit: &C1Circuit,
     input: &FullInputExtended,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
-    use crate::utils::sha256::{MAX_HEADER, MAX_PAYLOAD};
+    println!("Setting up C1 witness...");
+    let witness_start = Instant::now();
 
-    println!("Setting up msg_pk_c_binding witness...");
+    // Parse inputs
+    let pk_c_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.x));
+    let pk_c_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.y));
+    let sk_c = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_c));
+
+    let mut pw = PartialWitness::<F>::new();
+
+    // Set public input: pk_c
+    pw.set_biguint_target(&circuit.targets.pk_c.x.value, &pk_c_x.to_canonical_biguint())?;
+    pw.set_biguint_target(&circuit.targets.pk_c.y.value, &pk_c_y.to_canonical_biguint())?;
+
+    // Set private input: sk_c
+    pw.set_biguint_target(&circuit.targets.sk_c.value, &sk_c.to_canonical_biguint())?;
+
+    println!("C1 witness setup time: {:?}", witness_start.elapsed());
+
+    // Generate proof
+    println!("Generating C1 proof...");
+    let mut timing = TimingTree::new("c1_proof", Level::Info);
+    let proof = prove(&circuit.data.prover_only, &circuit.data.common, pw, &mut timing)?;
+    timing.print();
+
+    // Save proof artifacts
+    let proof_data = bincode::serialize(&proof)?;
+    fs::write(build_dir.join("c1_proof.bin"), &proof_data)?;
+    println!("C1 proof size: {} bytes", proof.to_bytes().len());
+
+    // Save verifier data
+    let verifier_data = bincode::serialize(&circuit.data.verifier_only)?;
+    fs::write(build_dir.join("c1_verifier.bin"), &verifier_data)?;
+    println!("C1 verifier data saved: {} bytes", verifier_data.len());
+
+    // Save common circuit data
+    let common_data = bincode::serialize(&circuit.data.common)?;
+    fs::write(build_dir.join("c1_common.bin"), &common_data)?;
+    println!("C1 common data saved: {} bytes", common_data.len());
+
+    Ok(proof)
+}
+
+/// Generate C2 proof (Public Key Decode and Check + C1 recursive)
+fn generate_c2_proof(
+    circuit: &C2Circuit,
+    c1_circuit: &C1Circuit,
+    input: &FullInputExtended,
+    c1_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
+    build_dir: &Path,
+) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
+    use crate::utils::sha256::{MAX_PAYLOAD};
+
+    println!("Setting up C2 witness...");
     let witness_start = Instant::now();
 
     let mut pw = PartialWitness::<F>::new();
 
-    // Set header bytes
-    if input.headerB64.len() < MAX_HEADER {
-        println!("Warning: headerB64 has {} entries; expected {}. Missing entries treated as 0.", input.headerB64.len(), MAX_HEADER);
-    }
-    for i in 0..MAX_HEADER {
-        let v = input
-            .headerB64
-            .get(i)
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        pw.set_target(circuit.targets.header[i], F::from_canonical_u32(v))?;
-    }
+    // Set recursive proof
+    pw.set_proof_with_pis_target(&circuit.targets.c1_proof, c1_proof)?;
+    pw.set_verifier_data_target(&circuit.targets.c1_vd, &c1_circuit.data.verifier_only)?;
 
     // Set payload bytes
     if input.payloadB64.len() < MAX_PAYLOAD {
@@ -197,50 +239,9 @@ fn generate_msg_pk_c_binding_proof(
         pw.set_target(circuit.targets.payload[i], F::from_canonical_u32(v))?;
     }
 
-    // Set lengths
-    let header_len_u32 = input.headerB64Length.parse::<u32>().unwrap_or(0);
+    // Set payload length
     let payload_len_u32 = input.payloadB64Length.parse::<u32>().unwrap_or(0);
-    pw.set_target(circuit.targets.header_len, F::from_canonical_u32(header_len_u32))?;
     pw.set_target(circuit.targets.payload_len, F::from_canonical_u32(payload_len_u32))?;
-
-    // Set SHA-256 message bits (MSB-first per byte) to match gated layout
-    let mut msg_bytes: Vec<u8> = Vec::with_capacity(MAX_HEADER + 1 + MAX_PAYLOAD);
-    let hlen = header_len_u32.min(MAX_HEADER as u32) as usize;
-    for i in 0..MAX_HEADER {
-        let b = if i < hlen {
-            input
-                .headerB64
-                .get(i)
-                .and_then(|s| s.parse::<u8>().ok())
-                .unwrap_or(0u8)
-        } else { 0u8 };
-        msg_bytes.push(b);
-    }
-    msg_bytes.push(46u8); // '.'
-    let plen = payload_len_u32.min(MAX_PAYLOAD as u32) as usize;
-    for i in 0..MAX_PAYLOAD {
-        let b = if i < plen {
-            input
-                .payloadB64
-                .get(i)
-                .and_then(|s| s.parse::<u8>().ok())
-                .unwrap_or(0u8)
-        } else { 0u8 };
-        msg_bytes.push(b);
-    }
-    debug_assert_eq!(circuit.targets.message_bits.len(), msg_bytes.len() * 8, "message bit length must match");
-    let mut k = 0;
-    for &b in &msg_bytes {
-        for i in (0..8).rev() { // MSB-first
-            let bit = ((b >> i) & 1) == 1;
-            pw.set_bool_target(circuit.targets.message_bits[k], bit)?;
-            k += 1;
-        }
-    }
-
-    // Set expected msg (digest)
-    let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
-    pw.set_biguint_target(&circuit.targets.msg.value, &msg.to_canonical_biguint())?;
 
     // Set Base64url extraction parameters
     let off_x_b64 = input.offXB64.parse::<u32>().unwrap_or(0);
@@ -260,119 +261,46 @@ fn generate_msg_pk_c_binding_proof(
     pw.set_target(circuit.targets.len_y_b64, F::from_canonical_u32(len_y_b64))?;
     pw.set_target(circuit.targets.drop_y, F::from_canonical_u32(drop_y))?;
     pw.set_target(circuit.targets.len_y_inner, F::from_canonical_u32(len_y_inner))?;
-
-    // pk_c limbs (little-endian u32 words from big-endian 32 bytes)
-    fn hex_to_limbs_le(hex: &str) -> [u32; 8] {
-        let mut be = [0u8; 32];
-        let bytes = hex::decode(hex.trim_start_matches("0x")).unwrap_or_default();
-        let src = if bytes.len() > 32 { &bytes[bytes.len() - 32..] } else { &bytes[..] };
-        be[32 - src.len()..].copy_from_slice(src);
-        let mut limbs = [0u32; 8];
-        for i in 0..8 {
-            let start = 32 - (i + 1) * 4;
-            limbs[i] = u32::from_be_bytes([
-                be[start], be[start + 1], be[start + 2], be[start + 3],
-            ]);
-        }
-        limbs
-    }
-    let pkc_x_limbs = hex_to_limbs_le(&input.pk_c.x);
-    let pkc_y_limbs = hex_to_limbs_le(&input.pk_c.y);
-    for i in 0..8 { pw.set_target(circuit.targets.pkc_x_limbs[i], F::from_canonical_u32(pkc_x_limbs[i]))?; }
-    for i in 0..8 { pw.set_target(circuit.targets.pkc_y_limbs[i], F::from_canonical_u32(pkc_y_limbs[i]))?; }
-
-    println!("msg_pk_c_binding witness setup time: {:?}", witness_start.elapsed());
+    
+    println!("C2 witness setup time: {:?}", witness_start.elapsed());
 
     // Generate proof
-    println!("Generating msg_pk_c_binding proof...");
-    let mut timing = TimingTree::new("msg_pk_c_binding_proof", Level::Info);
+    println!("Generating C2 proof...");
+    let mut timing = TimingTree::new("c2_proof", Level::Info);
     let proof = prove(&circuit.data.prover_only, &circuit.data.common, pw, &mut timing)?;
     timing.print();
 
     // Save proof artifacts
     let proof_data = bincode::serialize(&proof)?;
-    fs::write(build_dir.join("msg_pk_c_binding_proof.bin"), &proof_data)?;
-    println!("msg_pk_c_binding proof size: {} bytes", proof.to_bytes().len());
+    fs::write(build_dir.join("c2_proof.bin"), &proof_data)?;
+    println!("C2 proof size: {} bytes", proof.to_bytes().len());
 
     // Save verifier data
     let verifier_data = bincode::serialize(&circuit.data.verifier_only)?;
-    fs::write(build_dir.join("msg_pk_c_binding_verifier.bin"), &verifier_data)?;
-    println!("msg_pk_c_binding verifier data saved: {} bytes", verifier_data.len());
+    fs::write(build_dir.join("c2_verifier.bin"), &verifier_data)?;
+    println!("C2 verifier data saved: {} bytes", verifier_data.len());
 
     // Save common circuit data
     let common_data = bincode::serialize(&circuit.data.common)?;
-    fs::write(build_dir.join("msg_pk_c_binding_common.bin"), &common_data)?;
-    println!("msg_pk_c_binding common data saved: {} bytes", common_data.len());
-
-    Ok(proof)
-}
-
-/// Generate C1_2 proof (EUDI Key Derivation + msg_pk_c_binding recursive)
-fn generate_c1_2_proof(
-    circuit: &C1_2Circuit,
-    msg_pk_c_binding_circuit: &MsgPkCBindingCircuit,
-    input: &FullInputExtended,
-    msg_pk_c_binding_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
-    build_dir: &Path,
-) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
-    println!("Setting up C1_2 witness...");
-    let witness_start = Instant::now();
-
-    // Parse inputs
-    let pk_c_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.x));
-    let pk_c_y = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.pk_c.y));
-    let sk_c = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.sk_c));
-
-    let mut pw = PartialWitness::<F>::new();
-
-    // Set recursive proof
-    pw.set_proof_with_pis_target(&circuit.targets.msg_pk_c_binding_proof, msg_pk_c_binding_proof)?;
-    pw.set_verifier_data_target(&circuit.targets.msg_pk_c_binding_vd, &msg_pk_c_binding_circuit.data.verifier_only)?;
-
-    // Set public input: pk_c
-    pw.set_biguint_target(&circuit.targets.pk_c.x.value, &pk_c_x.to_canonical_biguint())?;
-    pw.set_biguint_target(&circuit.targets.pk_c.y.value, &pk_c_y.to_canonical_biguint())?;
-
-    // Set private input: sk_c
-    pw.set_biguint_target(&circuit.targets.sk_c.value, &sk_c.to_canonical_biguint())?;
-    
-    println!("C1_2 witness setup time: {:?}", witness_start.elapsed());
-    
-    // Generate proof
-    println!("Generating C1_2 proof...");
-    let mut timing = TimingTree::new("c1_2_proof", Level::Info);
-    let proof = prove(&circuit.data.prover_only, &circuit.data.common, pw, &mut timing)?;
-    timing.print();
-    
-    // Save proof artifacts
-    let proof_data = bincode::serialize(&proof)?;
-    fs::write(build_dir.join("c1_2_proof.bin"), &proof_data)?;
-    println!("C1_2 proof size: {} bytes", proof.to_bytes().len());
-    
-    // Save verifier data
-    let verifier_data = bincode::serialize(&circuit.data.verifier_only)?;
-    fs::write(build_dir.join("c1_2_verifier.bin"), &verifier_data)?;
-    println!("C1_2 verifier data saved: {} bytes", verifier_data.len());
-    
-    // Save common circuit data
-    let common_data = bincode::serialize(&circuit.data.common)?;
-    fs::write(build_dir.join("c1_2_common.bin"), &common_data)?;
-    println!("C1_2 common data saved: {} bytes", common_data.len());
+    fs::write(build_dir.join("c2_common.bin"), &common_data)?;
+    println!("C2 common data saved: {} bytes", common_data.len());
     
     Ok(proof)
 }
 
-/// Generate C3 proof (Signature Verification + C1_2 Recursive)
+/// Generate C3 proof (Hash Calculation + Signature Verification + C2 Recursive)
 fn generate_c3_proof(
     circuit: &C3Circuit,
-    c1_2_circuit: &C1_2Circuit,
+    c2_circuit: &C2Circuit,
     input: &FullInputExtended,
-    c1_2_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
+    c2_proof: &plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>,
     build_dir: &Path,
 ) -> Result<plonky2::plonk::proof::ProofWithPublicInputs<F, Cfg, D>> {
+    use crate::utils::sha256::{MAX_HEADER, MAX_PAYLOAD};
+
     println!("Setting up C3 witness...");
     let witness_start = Instant::now();
-    
+
     // Parse inputs
     let pk_issuer = &input.pk_issuer;
     let pk_issuer_x = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&pk_issuer.x));
@@ -380,22 +308,90 @@ fn generate_c3_proof(
     let msg = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.msg));
     let sig_r = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.r));
     let sig_s = P256Scalar::from_noncanonical_biguint(hex_to_bigint(&input.signature.s));
-    
+
     let mut pw = PartialWitness::<F>::new();
-    
+
     // Set recursive proof
-    pw.set_proof_with_pis_target(&circuit.targets.c1_2_proof, c1_2_proof)?;
-    pw.set_verifier_data_target(&circuit.targets.c1_2_vd, &c1_2_circuit.data.verifier_only)?;
-    
+    pw.set_proof_with_pis_target(&circuit.targets.c2_proof, c2_proof)?;
+    pw.set_verifier_data_target(&circuit.targets.c2_vd, &c2_circuit.data.verifier_only)?;
+
     // Set public input: pk_issuer
     pw.set_biguint_target(&circuit.targets.pk_issuer.x.value, &pk_issuer_x.to_canonical_biguint())?;
     pw.set_biguint_target(&circuit.targets.pk_issuer.y.value, &pk_issuer_y.to_canonical_biguint())?;
-    
+
     // Set private inputs: msg, signature
     pw.set_biguint_target(&circuit.targets.msg.value, &msg.to_canonical_biguint())?;
     pw.set_biguint_target(&circuit.targets.sig.r.value, &sig_r.to_canonical_biguint())?;
     pw.set_biguint_target(&circuit.targets.sig.s.value, &sig_s.to_canonical_biguint())?;
-    
+
+    // Set header bytes for SHA-256 hash calculation
+    if input.headerB64.len() < MAX_HEADER {
+        println!("Warning: headerB64 has {} entries; expected {}. Missing entries treated as 0.", input.headerB64.len(), MAX_HEADER);
+    }
+    for i in 0..MAX_HEADER {
+        let v = input
+            .headerB64
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        pw.set_target(circuit.targets.header[i], F::from_canonical_u32(v))?;
+    }
+
+    // Set header length
+    let header_len_u32 = input.headerB64Length.parse::<u32>().unwrap_or(0);
+    pw.set_target(circuit.targets.header_len, F::from_canonical_u32(header_len_u32))?;
+
+    // Set payload bytes for SHA-256 hash calculation
+    if input.payloadB64.len() < MAX_PAYLOAD {
+        println!("Warning: payloadB64 has {} entries; expected {}. Missing entries treated as 0.", input.payloadB64.len(), MAX_PAYLOAD);
+    }
+    for i in 0..MAX_PAYLOAD {
+        let v = input
+            .payloadB64
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        pw.set_target(circuit.targets.payload[i], F::from_canonical_u32(v))?;
+    }
+
+    // Set payload length
+    let payload_len_u32 = input.payloadB64Length.parse::<u32>().unwrap_or(0);
+    pw.set_target(circuit.targets.payload_len, F::from_canonical_u32(payload_len_u32))?;
+
+    // Set message_bits for SHA-256 calculation
+    // Build msg_bytes: header || '.' || payload
+    let mut msg_bytes = Vec::new();
+    let hlen = header_len_u32.min(MAX_HEADER as u32) as usize;
+    for i in 0..MAX_HEADER {
+        let b = if i < hlen {
+            input.headerB64.get(i).and_then(|s| s.parse::<u8>().ok()).unwrap_or(0)
+        } else {
+            0
+        };
+        msg_bytes.push(b);
+    }
+    msg_bytes.push(46u8); // '.' separator
+    let plen = payload_len_u32.min(MAX_PAYLOAD as u32) as usize;
+    for i in 0..MAX_PAYLOAD {
+        let b = if i < plen {
+            input.payloadB64.get(i).and_then(|s| s.parse::<u8>().ok()).unwrap_or(0)
+        } else {
+            0
+        };
+        msg_bytes.push(b);
+    }
+
+    // Convert bytes to bits (MSB first)
+    debug_assert_eq!(circuit.targets.message_bits.len(), msg_bytes.len() * 8);
+    let mut k = 0;
+    for &b in &msg_bytes {
+        for i in (0..8).rev() {
+            let bit = ((b >> i) & 1) == 1;
+            pw.set_bool_target(circuit.targets.message_bits[k], bit)?;
+            k += 1;
+        }
+    }
+
     println!("C3 witness setup time: {:?}", witness_start.elapsed());
     
     // Generate proof

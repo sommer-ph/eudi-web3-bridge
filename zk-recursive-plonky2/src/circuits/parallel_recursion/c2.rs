@@ -1,43 +1,41 @@
-//! Message and public key binding circuit implementation.
+//! C2 circuit implementation for public key decoding and verification.
 //!
 //! This module implements a specialized circuit that verifies:
-//! - SHA-256(header '.' payload) == msg verification
 //! - Base64url extraction and binding of pk_c from payload
+//! - Ensures extracted pk_c matches the provided pk_c
 //!
 //! The circuit reuses modular gadgets from utils:
-//! - utils::sha256::add_sha256_header_dot_payload_equals_msg
 //! - utils::base64_decode::add_pk_binding_extract
 //!
 //! All inputs are private:
-//! - header[64] ASCII bytes and header_len (0..64)
 //! - payload[1024] ASCII bytes and payload_len (0..1024)
-//! - msg as P256 scalar (SHA-256 digest)
 //! - Base64url extraction params: offXB64, lenXB64, dropX, lenXInner, offYB64, lenYB64, dropY, lenYInner
 //! - pk_c.x, pk_c.y as 8×u32 LE limbs
+//!
+//! Public outputs:
+//! - pk_c extracted and verified from the payload
 
-use plonky2::iop::target::{BoolTarget, Target};
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-use plonky2_ecdsa::field::p256_scalar::P256Scalar;
-use plonky2_ecdsa::gadgets::nonnative::{CircuitBuilderNonNative, NonNativeTarget};
+use plonky2_ecdsa::curve::p256::P256;
+use plonky2_ecdsa::gadgets::curve::CircuitBuilderCurve;
 
-use crate::utils::sha256 as sha_g;
 use crate::utils::base64_decode as b64_g;
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
-/// Targets for the message/pk_c binding circuit.
-pub struct MsgPkCBindingTargets {
-    // SHA-256 inputs/outputs
-    pub header: Vec<Target>,        // 64 bytes
+/// Targets for the C2 circuit (Public Key Decode and Check).
+pub struct C2CircuitTargets {
+    // Public output: extracted and verified pk_c
+    pub pk_c: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
+
+    // Private inputs
     pub payload: Vec<Target>,       // 1024 bytes
-    pub header_len: Target,         // 0..64
     pub payload_len: Target,        // 0..1024
-    pub msg: NonNativeTarget<P256Scalar>,
-    pub message_bits: Vec<BoolTarget>, // MSB-first, len 8640
 
     // Base64url extraction params
     pub off_x_b64: Target,
@@ -49,27 +47,27 @@ pub struct MsgPkCBindingTargets {
     pub drop_y: Target,
     pub len_y_inner: Target,
 
-    // pk_c limbs to compare with extracted limbs
-    pub pkc_x_limbs: Vec<Target>,
-    pub pkc_y_limbs: Vec<Target>,
 }
 
-pub struct MsgPkCBindingCircuit {
+pub struct C2Circuit {
     pub data: CircuitData<F, Cfg, D>,
-    pub targets: MsgPkCBindingTargets,
+    pub targets: C2CircuitTargets,
 }
 
-pub fn build_msg_pk_c_binding_circuit() -> MsgPkCBindingCircuit {
+pub fn build_c2_circuit() -> C2Circuit {
     let mut config = CircuitConfig::standard_ecc_config();
     config.zero_knowledge = true;
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
+    // === Public output: pk_c ===
+    let pk_c = builder.add_virtual_affine_point_target::<P256>();
+    for limb in pk_c.x.value.limbs.iter().chain(pk_c.y.value.limbs.iter()) {
+        builder.register_public_input(limb.0);
+    }
+
     // === Private inputs ===
-    let header: Vec<Target> = (0..sha_g::MAX_HEADER).map(|_| builder.add_virtual_target()).collect();
-    let payload: Vec<Target> = (0..sha_g::MAX_PAYLOAD).map(|_| builder.add_virtual_target()).collect();
-    let header_len = builder.add_virtual_target();
+    let payload: Vec<Target> = (0..1024).map(|_| builder.add_virtual_target()).collect();
     let payload_len = builder.add_virtual_target();
-    let msg = builder.add_virtual_nonnative_target::<P256Scalar>();
 
     let off_x_b64 = builder.add_virtual_target();
     let len_x_b64 = builder.add_virtual_target();
@@ -80,24 +78,9 @@ pub fn build_msg_pk_c_binding_circuit() -> MsgPkCBindingCircuit {
     let drop_y = builder.add_virtual_target();
     let len_y_inner = builder.add_virtual_target();
 
-    let mut pkc_x_limbs = Vec::with_capacity(8);
-    let mut pkc_y_limbs = Vec::with_capacity(8);
-    for _ in 0..8 { pkc_x_limbs.push(builder.add_virtual_target()); }
-    for _ in 0..8 { pkc_y_limbs.push(builder.add_virtual_target()); }
-
-    // === SHA-256(header '.' payload) == msg ===
-    let header_arr: [Target; sha_g::MAX_HEADER] = core::array::from_fn(|i| header[i]);
-    let payload_arr: [Target; sha_g::MAX_PAYLOAD] = core::array::from_fn(|i| payload[i]);
-    let sha_targets = sha_g::add_sha256_header_dot_payload_equals_msg(
-        &mut builder,
-        &header_arr,
-        &payload_arr,
-        header_len,
-        payload_len,
-        &msg,
-    );
 
     // === Base64url extraction: payload pk == pk_c ===
+    let payload_arr: [Target; 1024] = core::array::from_fn(|i| payload[i]);
     let extracted = b64_g::add_pk_binding_extract(
         &mut builder,
         &payload_arr,
@@ -110,22 +93,20 @@ pub fn build_msg_pk_c_binding_circuit() -> MsgPkCBindingCircuit {
         drop_y,
         len_y_inner,
     );
-    // Connect extracted limbs with pk_c limbs
+
+    // Connect extracted limbs directly to public key point
     for i in 0..8 {
-        builder.connect(extracted.x_limbs[i], pkc_x_limbs[i]);
-        builder.connect(extracted.y_limbs[i], pkc_y_limbs[i]);
+        builder.connect(extracted.x_limbs[i], pk_c.x.value.limbs[i].0);
+        builder.connect(extracted.y_limbs[i], pk_c.y.value.limbs[i].0);
     }
 
     let data = builder.build::<Cfg>();
-    MsgPkCBindingCircuit {
+    C2Circuit {
         data,
-        targets: MsgPkCBindingTargets {
-            header,
+        targets: C2CircuitTargets {
+            pk_c,
             payload,
-            header_len,
             payload_len,
-            msg,
-            message_bits: sha_targets.message_bits,
             off_x_b64,
             len_x_b64,
             drop_x,
@@ -134,9 +115,18 @@ pub fn build_msg_pk_c_binding_circuit() -> MsgPkCBindingCircuit {
             len_y_b64,
             drop_y,
             len_y_inner,
-            pkc_x_limbs,
-            pkc_y_limbs,
         },
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_c2_circuit() {
+        let circuit = build_c2_circuit();
+        println!("C2 circuit built successfully");
+        println!("Circuit size: {} gates", circuit.data.common.degree());
+    }
+}

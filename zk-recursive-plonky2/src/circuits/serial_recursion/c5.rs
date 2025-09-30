@@ -168,17 +168,17 @@ pub fn build_c5_circuit_optimized(c4_common: &CommonCircuitData<F, D>, derivatio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuits::serial_recursion::c1_2::build_c1_2_circuit;
+    use crate::circuits::serial_recursion::c1::build_c1_circuit;
+    use crate::circuits::serial_recursion::c2::build_c2_circuit;
     use crate::circuits::serial_recursion::c3::build_c3_circuit;
     use crate::circuits::serial_recursion::c4::build_c4_circuit;
     use crate::types::input::SignatureMode;
     
     #[test]
     fn test_build_c5_circuit_with_static_chain_sha512() {
-        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
-        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
-        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
+        let c1_circuit = build_c1_circuit();
+        let c2_circuit = build_c2_circuit(&c1_circuit.data.common);
+        let c3_circuit = build_c3_circuit(&c2_circuit.data.common, SignatureMode::Static);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
         println!("C5 circuit (static chain, SHA512) built successfully");
@@ -187,10 +187,9 @@ mod tests {
 
     #[test]
     fn test_build_c5_circuit_with_static_chain_poseidon() {
-        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
-        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
-        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Static);
+        let c1_circuit = build_c1_circuit();
+        let c2_circuit = build_c2_circuit(&c1_circuit.data.common);
+        let c3_circuit = build_c3_circuit(&c2_circuit.data.common, SignatureMode::Static);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
         println!("C5 circuit (static chain, Poseidon) built successfully");
@@ -199,10 +198,9 @@ mod tests {
 
     #[test]
     fn test_build_c5_circuit_with_dynamic_chain_sha512() {
-        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
-        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
-        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
+        let c1_circuit = build_c1_circuit();
+        let c2_circuit = build_c2_circuit(&c1_circuit.data.common);
+        let c3_circuit = build_c3_circuit(&c2_circuit.data.common, SignatureMode::Dynamic);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Sha512);
         println!("C5 circuit (dynamic chain, SHA512) built successfully");
@@ -211,10 +209,9 @@ mod tests {
     
     #[test]
     fn test_build_c5_circuit_with_dynamic_chain_poseidon() {
-        use super::super::msg_pk_c_binding::build_msg_pk_c_binding_circuit;
-        let msg_pk_c_binding_circuit = build_msg_pk_c_binding_circuit();
-        let c1_2_circuit = build_c1_2_circuit(&msg_pk_c_binding_circuit.data.common);
-        let c3_circuit = build_c3_circuit(&c1_2_circuit.data.common, SignatureMode::Dynamic);
+        let c1_circuit = build_c1_circuit();
+        let c2_circuit = build_c2_circuit(&c1_circuit.data.common);
+        let c3_circuit = build_c3_circuit(&c2_circuit.data.common, SignatureMode::Dynamic);
         let c4_circuit = build_c4_circuit(&c3_circuit.data.common);
         let c5_circuit = build_c5_circuit_optimized(&c4_circuit.data.common, DerivationMode::Poseidon);
         println!("C5 circuit (dynamic chain, Poseidon) built successfully");

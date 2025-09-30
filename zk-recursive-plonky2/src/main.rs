@@ -53,7 +53,7 @@ enum Commands {
         #[arg(long, default_value = "sha512", help = "Outer derivation mode: sha512 or poseidon")]
         outer_derive_mode: String,
     },
-    /// Generate serial recursive proof (msg_pk_c_binding -> C1_2 -> C3 -> C4 -> C5)
+    /// Generate serial recursive proof (C1 -> C2 -> C3 -> C4 -> C5)
     Serial {
         #[arg(short, long, help = "Extended input JSON file with proof data")]
         input: String,
@@ -62,7 +62,7 @@ enum Commands {
         #[arg(long, default_value = "sha512", help = "Derivation mode for C5: sha512 or poseidon")]
         der_mode: String,
     },
-    /// Generate parallel recursive proof (msg_pk_c_binding, C1_2, C3, C4 in parallel -> C5)
+    /// Generate parallel recursive proof (C1, C2, C3, C4 in parallel -> C5)
     Parallel {
         #[arg(short, long, help = "Extended input JSON file with proof data")]
         input: String,
@@ -70,11 +70,6 @@ enum Commands {
         sig_mode: String,
         #[arg(long, default_value = "sha512", help = "Derivation mode for C5: sha512 or poseidon")]
         der_mode: String,
-    },
-    /// Generate combined proof: SHA-256(header '.' payload) == msg AND payload pk == pk_c
-    MsgPkCBinding {
-        #[arg(short, long, help = "Extended input JSON with header/payload and offsets")]
-        input: String,
     },
 }
 
@@ -243,8 +238,8 @@ fn main() -> Result<()> {
             println!("Serial circuits build time: {:?}", circuits_total);
 
             // Print circuit stats for each step
-            print_circuit_stats("msg_pk_c_binding", &circuits.msg_pk_c_binding.data.common);
-            print_circuit_stats("C1_2", &circuits.c1_2.data.common);
+            print_circuit_stats("C1", &circuits.c1.data.common);
+            print_circuit_stats("C2", &circuits.c2.data.common);
             print_circuit_stats("C3", &circuits.c3.data.common);
             print_circuit_stats("C4", &circuits.c4.data.common);
             print_circuit_stats("C5", &circuits.c5.data.common);
@@ -280,19 +275,14 @@ fn main() -> Result<()> {
             println!("Parallel circuits build time: {:?}", circuits_total);
             
             // Print circuit stats for each step
-            print_circuit_stats("msg_pk_c_binding", &circuits.msg_pk_c_binding.data.common);
-            print_circuit_stats("C1_2", &circuits.c1_2.data.common);
+            print_circuit_stats("C1", &circuits.c1.data.common);
+            print_circuit_stats("C2", &circuits.c2.data.common);
             print_circuit_stats("C3", &circuits.c3.data.common);
             print_circuit_stats("C4", &circuits.c4.data.common);
             print_circuit_stats("C5", &circuits.c5.data.common);
             
             println!("\n=== GENERATING PARALLEL RECURSIVE PROOF ===");
             generate_parallel_recursive_proof(&circuits, &input, &build_dir)?;
-        },
-        Some(Commands::MsgPkCBinding { input }) => {
-            use zk_recursive::commands::msg_pk_c_binding::generate_msg_pk_c_binding_proof;
-            println!("\n=== GENERATING MSG+PK_C-BINDING PROOF ===");
-            generate_msg_pk_c_binding_proof(&input, &build_dir)?;
         },
         None => {
             println!("\nNo command specified. Available commands:");
@@ -310,8 +300,6 @@ fn main() -> Result<()> {
             println!("  cargo run --release --bin zk-recursive -- outer-extended --input inputs/input_extended.json --inner-sig-mode static --outer-derive-mode sha512");
             println!("  cargo run --release --bin zk-recursive -- outer --input inputs/input.json --inner-sig-mode static --outer-derive-mode poseidon");
             println!("  cargo run --release --bin zk-recursive -- outer-extended --input inputs/input_extended.json --inner-sig-mode static --outer-derive-mode poseidon");
-            println!("\nBinding:");
-            println!("  cargo run --release --bin zk-recursive -- msg-pk-c-binding --input inputs/input_extended.json");
             println!("\nSerial:");
             println!("  cargo run --release --bin zk-recursive -- serial --input inputs/input_extended.json --sig-mode dynamic --der-mode sha512");
             println!("  cargo run --release --bin zk-recursive -- serial --input inputs/input_extended.json --sig-mode dynamic --der-mode poseidon");

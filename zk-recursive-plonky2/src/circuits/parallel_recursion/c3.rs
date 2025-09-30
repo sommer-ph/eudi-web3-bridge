@@ -1,3 +1,4 @@
+use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -15,6 +16,7 @@ use num_traits::Num;
 use plonky2::field::types::Field;
 
 use crate::types::input::SignatureMode;
+use crate::utils::sha256 as sha_g;
 
 const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
@@ -24,17 +26,24 @@ type F = <Cfg as GenericConfig<D>>::F;
 const STATIC_PK_ISSUER_X: &str = "66432692286261411630769223098970693805397596870633670159153355502222145619968";
 const STATIC_PK_ISSUER_Y: &str = "63182586149833488067701290985084360701345487374231728189741684364091950142361";
 
-/// Targets for the C3 circuit (EUDI credential signature Verification).
+/// Targets for the C3 circuit (Hash calculation + EUDI credential signature Verification).
 pub struct C3CircuitTargets {
     // Public input: issuer public key (always present, validated in static mode)
     pub pk_issuer: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
-    
+
     // Private inputs: message and signature
     pub msg: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<P256Scalar>,
     pub sig: ECDSASignatureTarget<P256>,
+
+    // SHA-256 hash calculation inputs
+    pub header: Vec<Target>,        // 64 bytes
+    pub payload: Vec<Target>,       // 1024 bytes
+    pub header_len: Target,         // 0..64
+    pub payload_len: Target,        // 0..1024
+    pub message_bits: Vec<BoolTarget>, // MSB-first, len 8640
 }
 
-/// C3 circuit that implements C3 (Signature Verification).
+/// C3 circuit that implements Hash calculation + C3 (Signature Verification).
 pub struct C3Circuit {
     pub data: CircuitData<F, Cfg, D>,
     pub targets: C3CircuitTargets,
@@ -42,6 +51,7 @@ pub struct C3Circuit {
 }
 
 /// Build the C3 circuit implementing:
+/// - SHA-256(header '.' payload) == msg verification
 /// - C3: SigVerify(pk_issuer, msg, sig) - Credential signature verification over P256
 /// - In static mode: additionally validates that pk_issuer matches fixed values
 pub fn build_c3_circuit(signature_mode: SignatureMode) -> C3Circuit {
@@ -61,6 +71,24 @@ pub fn build_c3_circuit(signature_mode: SignatureMode) -> C3Circuit {
     let r = builder.add_virtual_nonnative_target::<P256Scalar>();
     let s = builder.add_virtual_nonnative_target::<P256Scalar>();
     let signature = ECDSASignatureTarget { r, s };
+
+    // SHA-256 inputs
+    let header: Vec<Target> = (0..sha_g::MAX_HEADER).map(|_| builder.add_virtual_target()).collect();
+    let payload: Vec<Target> = (0..sha_g::MAX_PAYLOAD).map(|_| builder.add_virtual_target()).collect();
+    let header_len = builder.add_virtual_target();
+    let payload_len = builder.add_virtual_target();
+
+    // === SHA-256(header '.' payload) == msg ===
+    let header_arr: [Target; sha_g::MAX_HEADER] = core::array::from_fn(|i| header[i]);
+    let payload_arr: [Target; sha_g::MAX_PAYLOAD] = core::array::from_fn(|i| payload[i]);
+    let sha_targets = sha_g::add_sha256_header_dot_payload_equals_msg(
+        &mut builder,
+        &header_arr,
+        &payload_arr,
+        header_len,
+        payload_len,
+        &msg,
+    );
 
     // === C3: Credential Signature Verification ===
     match signature_mode {
@@ -93,6 +121,11 @@ pub fn build_c3_circuit(signature_mode: SignatureMode) -> C3Circuit {
         pk_issuer,
         msg,
         sig: signature,
+        header,
+        payload,
+        header_len,
+        payload_len,
+        message_bits: sha_targets.message_bits,
     };
 
     C3Circuit {

@@ -13,22 +13,21 @@ const D: usize = 2;
 type Cfg = PoseidonGoldilocksConfig;
 type F = <Cfg as GenericConfig<D>>::F;
 
-/// Targets for the C1_2 circuit (EUDI wallet key derivation + credential public key check).
-pub struct C1_2CircuitTargets {
+/// Targets for the C1 circuit (EUDI wallet key derivation).
+pub struct C1CircuitTargets {
     pub pk_c: plonky2_ecdsa::gadgets::curve::AffinePointTarget<P256>,
     pub sk_c: plonky2_ecdsa::gadgets::nonnative::NonNativeTarget<P256Scalar>,
 }
 
-/// C1_2 circuit that implements C1 (EUDI wallet key derivation) + C2 (Credential public key check).
-pub struct C1_2Circuit {
+/// C1 circuit that implements C1 (EUDI wallet key derivation).
+pub struct C1Circuit {
     pub data: CircuitData<F, Cfg, D>,
-    pub targets: C1_2CircuitTargets,
+    pub targets: C1CircuitTargets,
 }
 
-/// Build the C1_2 circuit implementing:
+/// Build the C1 circuit implementing:
 /// - C1: pk_c = KeyDer(sk_c) - EUDI wallet key derivation over P256
-/// - C2: pk_c === pk_c_calc - Public key equality check (pk_c extracted from EUDI credential)
-pub fn build_c1_2_circuit() -> C1_2Circuit {
+pub fn build_c1_circuit() -> C1Circuit {
     let mut config = CircuitConfig::standard_ecc_config();
     config.zero_knowledge = true; 
     println!("Zero-knowledge active? {}", config.zero_knowledge);
@@ -48,14 +47,13 @@ pub fn build_c1_2_circuit() -> C1_2Circuit {
     let pk_c_calc =
         fixed_base_curve_mul_circuit::<P256, F, D>(&mut builder, P256::GENERATOR_AFFINE, &sk_c);
 
-    // === C2: Credential Public Key Check (pk_c === pk_c_calc) ===
-    // Ensure the derived public key matches the public input
+    // Connect derived public key to public output
     builder.connect_affine_point(&pk_c_calc, &pk_c);
 
     let data = builder.build::<Cfg>();
-    let targets = C1_2CircuitTargets { pk_c, sk_c };
+    let targets = C1CircuitTargets { pk_c, sk_c };
 
-    C1_2Circuit { data, targets }
+    C1Circuit { data, targets }
 }
 
 #[cfg(test)]
@@ -63,9 +61,9 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_build_c1_2_circuit() {
-        let circuit = build_c1_2_circuit();
-        println!("C1_2 circuit built successfully");
+    fn test_build_c1_circuit() {
+        let circuit = build_c1_circuit();
+        println!("C1 circuit built successfully");
         println!("Circuit size: {} gates", circuit.data.common.degree());
     }
 }
